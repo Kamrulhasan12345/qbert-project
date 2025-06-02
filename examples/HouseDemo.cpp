@@ -89,7 +89,7 @@ void iDraw()
     iFilledCircle(sun_x, sun_y, sun_r);
     drawSunRays();
 
-    // drawCoordinateAxes(50.0);
+    drawCoordinateAxes(50.0);
 }
 
 /*

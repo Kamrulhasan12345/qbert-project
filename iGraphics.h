@@ -1180,14 +1180,15 @@ void iSetTransparentColor(int r, int g, int b, double a)
 
 void reshapeFF(int width, int height)
 {
-    iScreenWidth = width;
-    iScreenHeight = height;
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    // iResize(width, height);
-    glOrtho(0.0, iScreenWidth, 0.0, iScreenHeight, -1.0, 1.0);
-    glViewport(0.0, 0.0, iScreenWidth, iScreenHeight);
-    glutPostRedisplay();
+    // iScreenWidth = width;
+    // iScreenHeight = height;
+    // glMatrixMode(GL_PROJECTION);
+    // glLoadIdentity();
+    // // iResize(width, height);
+    // glOrtho(0.0, iScreenWidth, 0.0, iScreenHeight, -1.0, 1.0);
+    // glViewport(0.0, 0.0, iScreenWidth, iScreenHeight);
+    // glutPostRedisplay();
+    glutReshapeWindow(iSmallScreenWidth, iSmallScreenHeight);
 }
 
 void iInitialize(int width = 500, int height = 500, const char *title = "iGraphics")
@@ -1205,6 +1206,18 @@ void iInitialize(int width = 500, int height = 500, const char *title = "iGraphi
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glOrtho(0.0, width, 0.0, height, -1.0, 1.0);
+
+    // #ifdef _WIN32
+    // HWND hwnd = FindWindowA(NULL, title);
+    // if (hwnd) {
+    //     LONG style = GetWindowLong(hwnd, GWL_STYLE);
+    //     style &= ~WS_SIZEBOX; 
+    //     style &= ~WS_MAXIMIZEBOX; 
+    //     SetWindowLong(hwnd, GWL_STYLE, style);
+    //     SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
+    //         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+    // }
+    // #endif
 
     iClear();
 
