@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "iGraphics.h"
 
@@ -13,6 +14,11 @@ typedef enum {
     STATE_EDITOR
 } app_t;
 
+typedef enum {
+    TYPE_BLOCK,
+    TYPE_PLAYER
+} object_t;
+
 typedef struct {
     bool wireframe;
     bool grid;
@@ -20,15 +26,55 @@ typedef struct {
 } editor_t;
 
 typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} color_t;
+
+typedef struct {
     bool valid;
     int state;
 } tile_t;
+
+typedef enum {
+    LOOK_LEFT,
+    LOOK_RIGHT,
+    LOOK_UP,
+    LOOK_DOWN
+} look_t;
+
+typedef struct {
+    double x, y, z;
+} position_t;
+
+typedef struct {
+    position_t from;
+    position_t to;
+    float t,duration;
+    bool active;
+} jumper_t;
+
+typedef struct {
+    position_t pos;
+    look_t la;
+    jumper_t jump;
+} body_t;
+
+typedef struct {
+    object_t type;
+    position_t pos;
+    uint8_t flags;
+} drawqueue_t;
 
 app_t app_state = STATE_GAME;
 
 editor_t editor = {.wireframe=false,.grid=false,.debug=false};
 
 tile_t tiles[MAX_SIZE][MAX_SIZE][MAX_SIZE];
+
+drawqueue_t drawqueue[MAX_SIZE*MAX_SIZE*MAX_SIZE+1];
+
+body_t player;
 
 int width=800,height=800;
 
@@ -44,29 +90,36 @@ double blocksPos3d[][3]={
     {3,3,0},{2,3,1},{1,3,2},{0,3,3},
     {2,2,0},{1,2,1},{0,2,2},
     {1,1,0},{0,1,1},
-    {0,0,0},{0,0,1},
+    {0,0,0},
+    {0,0,1},
     {2,3,5},{1,5,5},
     {5,4,3},
-    // {5,5,7}
+    {5,5,7},{3,7,5}
 };
-
-double playerPos3d[3] = {0,0,0};
 
 int n =  sizeof(blocksPos3d)/sizeof(blocksPos3d[0]);
 
-void iDTile(double x, double y) {
+int cmp_dk (const void *a, const void *b) {
+    drawqueue_t* A=(drawqueue_t*)a;
+    drawqueue_t* B=(drawqueue_t*)b;
+    int d1 = A->pos.x+A->pos.z+(MAX_SIZE-1-A->pos.y)+A->type;
+    int d2 = B->pos.x+B->pos.z+(MAX_SIZE-1-B->pos.y)+B->type;
+    return (d1>d2)-(d1<d2);
+}
+
+void iTile(double x, double y) {
     double x_coords[]={x,x+a*cos(PI/6),x,x-a*cos(PI/6)};
     double y_coords[]={y,y-a/2,y-a,y-a/2};
     iFilledPolygon(x_coords,y_coords,4);
 }
 
-void iDTileOutline(double x, double y) {
+void iTileOutline(double x, double y) {
     double x_coords[]={x,x+a*cos(PI/6),x,x-a*cos(PI/6)};
     double y_coords[]={y,y-a/2,y-a,y-a/2};
     iPolygon(x_coords,y_coords,4);
 }
 
-void iDSide(double x, double y) {
+void iSide(double x, double y) {
     double x_coords[]={x,x,x+a*cos(PI/6),x+a*cos(PI/6)};
     double y_coords[]={y-a,y-2*a,y-3*a/2,y-a/2};
     iSetColor(49, 70, 70);
@@ -76,7 +129,7 @@ void iDSide(double x, double y) {
     iFilledPolygon(x_coords,y_coords,4);
 }
 
-void iDSideOutline(double x, double y) {
+void iSideOutline(double x, double y) {
     double x_coords[]={x,x,x+a*cos(PI/6),x+a*cos(PI/6)};
     double y_coords[]={y-a,y-2*a,y-3*a/2,y-a/2};
     iPolygon(x_coords,y_coords,4);
@@ -84,44 +137,73 @@ void iDSideOutline(double x, double y) {
     iPolygon(x_coords,y_coords,4);
 }
 
-void iGenTiles() {
-    // for(int y = MAX_SIZE-1;y>=0;y--) {
-    //     for(int x=0;x<MAX_SIZE;x++) {
-    //         for(int z=0;z<MAX_SIZE;z++) {
+void iDrawQueue() {
+    // for(int s=0; s<MAX_SIZE*2; s++) {
+    //     for(int x=0; x<=s&&x<MAX_SIZE; x++) {
+    //         int z = s-x;
+    //         if (z>=MAX_SIZE)continue;
+    //         for(int y =MAX_SIZE-1;y>=0;y--) {
     //             if (tiles[y][x][z].valid) {
-                    // if (!editor.wireframe) {
-                    //     iSetColor(86, 70, 239);
-                    //     iDTile(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
-                    //     iDSide(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
-                    // } else {
-                    //     iSetColor(49, 70, 70);
-                    //     iDTileOutline(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
-                    //     iDSideOutline(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
-                    // }
+    //                 if (!editor.wireframe) {
+    //                     iSetColor(86, 70, 239);
+    //                     iTile(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
+    //                     iSide(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
+    //                 } else {
+    //                     iSetColor(49, 70, 70);
+    //                     iTileOutline(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
+    //                     iSideOutline(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
+    //                 }
+    //                 if (player.pos.x==x&&player.pos.y==y&&player.pos.z==z) {
+    //                     iSetTransparentColor(0,0,0,0.5);
+    //                     iFilledEllipse(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/4,a/8);
+    //                     iSetColor(240,10,10);
+    //                     iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
+    //                 }
     //             }
     //         }
     //     }
     // }
-    for(int s=0; s<MAX_SIZE*2; s++) {
-        for(int x=0; x<=s&&x<MAX_SIZE; x++) {
-            int z = s-x;
-            if (z>=MAX_SIZE)continue;
-            for(int y =MAX_SIZE-1;y>=0;y--) {
-                if (tiles[y][x][z].valid) {
-                    if (!editor.wireframe) {
-                        iSetColor(86, 70, 239);
-                        iDTile(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
-                        iDSide(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
-                    } else {
-                        iSetColor(49, 70, 70);
-                        iDTileOutline(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
-                        iDSideOutline(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
-                    }
-                    if (playerPos3d[0]==x&&playerPos3d[1]==y&&playerPos3d[2]==z) {
-                        iSetColor(240,10,10);
-                        iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,15);
-                    }
+    // current approach: use a draw queue
+    int i = 0;
+    for(int y=MAX_SIZE-1;y>=0;y--) {
+        for(int x = 0; x < MAX_SIZE;x++) {
+            for(int z = 0; z < MAX_SIZE;z++) {
+                if (!tiles[y][x][z].valid) continue;
+                drawqueue[i].pos.x=x,drawqueue[i].pos.y=y,drawqueue[i].pos.z=z;
+                drawqueue[i].flags=tiles[y][x][z].state;
+                drawqueue[i++].type=TYPE_BLOCK;
+            }
+        }
+    }
+    if (app_state==STATE_GAME) {
+        drawqueue[i].pos.x=player.pos.x,drawqueue[i].pos.y=player.pos.y,drawqueue[i].pos.z=player.pos.z;
+        drawqueue[i].flags=player.jump.active;
+        drawqueue[i++].type=TYPE_PLAYER;
+    }
+    qsort(drawqueue, i, sizeof(drawqueue_t),cmp_dk);
+    // draw them now
+    // for(int k = 0; k < i; k++) printf("p: %lf %lf %lf f: %d t: %d\n",drawqueue[k].x,drawqueue[k].y,drawqueue[k].z,drawqueue[k].flags,drawqueue[k].type);
+    for(int j=0; j<i;j++) {
+        double x=drawqueue[j].pos.x,y=drawqueue[j].pos.y,z=drawqueue[j].pos.z;
+        switch(drawqueue[j].type) {
+            case TYPE_BLOCK: {
+                if (!editor.wireframe) {
+                    iSetColor(86, 70, 239);
+                    iTile(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
+                    iSide(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
+                } else {
+                    iSetColor(49, 70, 70);
+                    iTileOutline(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
+                    iSideOutline(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
                 }
+                break;
+            }
+            case TYPE_PLAYER: {
+                iSetTransparentColor(0,0,0,0.5);
+                iFilledEllipse(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/4,a/8);
+                iSetColor(240,10,10);
+                iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
+                break;
             }
         }
     }
@@ -140,7 +222,7 @@ void iGrid() {
 void iMenu() {
 }
 
-void iGame() {
+void iBlock() {
     for(int i = 0; i < n;i++) {
         int x=blocksPos3d[i][0],y=blocksPos3d[i][1],z=blocksPos3d[i][2];
         tiles[y][x][z].valid=true;
@@ -149,10 +231,21 @@ void iGame() {
 }
 
 void iPlayer() {
-    int x=playerPos3d[0],y=playerPos3d[1],z=playerPos3d[2];
-    iSetColor(240,10,10);
-    iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,15);
+    player.pos.x=0;
+    player.pos.y=0;
+    player.pos.z=1;
+    player.jump.active=0;
 }
+
+void iGame() {
+    iBlock();
+    iPlayer();
+    // drawqueue[i].pos.x=player.pos.x,drawqueue[i].pos.y=player.pos.y,drawqueue[i].pos.z=player.pos.z;
+    // drawqueue[i].flags=0;
+    // drawqueue[i].type=TYPE_PLAYER;
+}
+
+
 
 // /*
 // function iGenTiles() is the function that generates tiles for the blocks
@@ -210,21 +303,21 @@ function iDraw() is called again and again by the system.
 void iDraw() {
     // place your drawing codes here
     iClear();
-    iSetColor(255,255,255);
-    char pos[50];
-    snprintf(pos, 50, "%d, %d, %d",(int)playerPos3d[0], (int)playerPos3d[1], (int)playerPos3d[2]);
-    iText(10, 10, pos,GLUT_BITMAP_TIMES_ROMAN_24);
+
     if (app_state==STATE_MENU) {
         iMenu();
     } else if (app_state==STATE_GAME) {
+        iSetColor(255,255,255);
+        char pos[50];
+        snprintf(pos, 50, "%d, %d, %d",(int)player.pos.x, (int)player.pos.y, (int)player.pos.z);
+        iText(10, 10, pos,GLUT_BITMAP_TIMES_ROMAN_24);
         iGame();
-        iGenTiles();
+        iDrawQueue();
     } else if (app_state==STATE_EDITOR) {
-        iGenTiles();
+        iBlock();
+        iDrawQueue();
         if (editor.grid) iGrid();
     }
-    // iSetColor(255,255,255);
-    // iGenSides();
 }
 /*
 function iMouseMove() is called when the user moves the mouse.
@@ -289,10 +382,10 @@ void iKeyboard(unsigned char key) {
             case 'q': case ESC: app_state=STATE_MENU; break;
             case 'r': 
             {
-                playerPos3d[0]=0;
-                playerPos3d[1]=0;
-                playerPos3d[2]=0; 
-                printf("%lf %lf %lf\n",playerPos3d[0],playerPos3d[1],playerPos3d[2]); 
+                player.pos.x=0;
+                player.pos.y=0;
+                player.pos.z=0; 
+                printf("%lf %lf %lf\n",player.pos.x,player.pos.y,player.pos.z); 
                 break;
             }            
             default: break;
@@ -322,50 +415,28 @@ void iSpecialKeyboard(unsigned char key)
     } else if (app_state==STATE_GAME) {
         switch(key) {
             case GLUT_KEY_END: break;
-            case 'r': 
-            {
-                playerPos3d[0]=0;
-                playerPos3d[1]=0;
-                playerPos3d[2]=0; 
-                printf("%lf %lf %lf\n",playerPos3d[0],playerPos3d[1],playerPos3d[2]); 
-                break;
-            }
-            case GLUT_KEY_LEFT: 
-            {
-                playerPos3d[0]++; 
-                while (!tiles[(int)playerPos3d[1]][(int)playerPos3d[0]][(int)playerPos3d[2]].valid) {
-                    playerPos3d[1]++; 
-                    printf("%lf %lf %lf\n",playerPos3d[0],playerPos3d[1],playerPos3d[2]);
+            case GLUT_KEY_LEFT: {
+                int x= player.pos.x, y=player.pos.y,z = player.pos.z-1;
+                if (!(x>=0&&x<MAX_SIZE&&y>=0&&y<MAX_SIZE&&z>=0&&z<MAX_SIZE)) {
+                    // die and reset
+                    break;
                 }
-                printf("%lf %lf %lf\n",playerPos3d[0],playerPos3d[1],playerPos3d[2]);
-                break;
-            }
-            case GLUT_KEY_RIGHT: 
-            {
-                playerPos3d[2]++; 
-                while (!tiles[(int)playerPos3d[1]][(int)playerPos3d[0]][(int)playerPos3d[2]].valid) {
-                    playerPos3d[1]++; 
-                    printf("%lf %lf %lf\n",playerPos3d[0],playerPos3d[1],playerPos3d[2]);
+                if (tiles[y][x][z].valid) {
+                    // simply walk to this one, with no jump anim
+                } else if (tiles[y+1][x][z].valid && !tiles[y+2][x][z].valid) {
+                    // then move to this one, and do a jump anim
+                } else if (tiles[y-1][x][z].valid) {
+                    // then move to this one, still a jump anim
+                } else {
+                    // dont move or die
+                    break;
                 }
-                printf("%lf %lf %lf\n",playerPos3d[0],playerPos3d[1],playerPos3d[2]);
+                // now initiate movement and jump animation
                 break;
             }
-            case GLUT_KEY_UP: 
-            {
-                playerPos3d[0]<=0?:playerPos3d[0]--; 
-                if(playerPos3d[1]-1>=0&&tiles[(int)playerPos3d[1]-1][(int)playerPos3d[0]][(int)playerPos3d[2]].valid) 
-                    playerPos3d[1]--; 
-                printf("%lf %lf %lf\n",playerPos3d[0],playerPos3d[1],playerPos3d[2]);
-                break;
-            }
-            case GLUT_KEY_DOWN: 
-            {
-                playerPos3d[2]<=0?:playerPos3d[2]--; 
-                if(playerPos3d[1]-1>=0&&tiles[(int)playerPos3d[1]-1][(int)playerPos3d[0]][(int)playerPos3d[2]].valid)
-                    playerPos3d[1]--; 
-                printf("%lf %lf %lf\n",playerPos3d[0],playerPos3d[1],playerPos3d[2]);
-                break;
-            }
+            case GLUT_KEY_RIGHT: break;
+            case GLUT_KEY_UP: break;
+            case GLUT_KEY_DOWN: break;
             default: break;
         }
     }
@@ -376,7 +447,7 @@ int main(int argc, char *argv[])
 {
     glutInit(&argc, argv);
     iSetTransparency(1);
-    printf("%d",sizeof(blocksPos3d)/sizeof(blocksPos3d[0]));
+    printf("%d\n",sizeof(blocksPos3d)/sizeof(blocksPos3d[0]));
     iInitialize(width, height, "Q*Bert");
     return 0;
 }
