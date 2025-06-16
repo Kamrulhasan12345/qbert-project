@@ -66,7 +66,7 @@ typedef struct {
     uint8_t flags;
 } drawqueue_t;
 
-app_t app_state = STATE_GAME;
+app_t app_state = STATE_MENU;
 
 editor_t editor = {.wireframe=false,.grid=false,.debug=false};
 
@@ -92,9 +92,11 @@ double blocksPos3d[][3]={
     {1,1,0},{0,1,1},
     {0,0,0},
     {0,0,1},
-    {2,3,5},{1,5,5},
-    {5,4,3},
-    {5,5,7},{3,7,5}
+    {1,4,4},
+    // {2,3,5}
+    // {5,4,3},
+    {4,5,2},
+    {3,7,5}
 };
 
 int n =  sizeof(blocksPos3d)/sizeof(blocksPos3d[0]);
@@ -220,6 +222,12 @@ void iGrid() {
 }
 
 void iMenu() {
+    iSetColor(255,255,255);
+    iTextAdvanced(start_x-200,start_y-100,"Q*Bert",1, 2);
+    iSetColor(86, 169, 152);
+    iFilledRectangle(width/2-100,height/2-20,200,40);
+    iSetColor(0,0,0);
+    iText(width/2-20,height/2-5,"Start");
 }
 
 void iBlock() {
@@ -272,6 +280,7 @@ void iPlayerMove(int x, int y, int z) {
 }
 
 void iGame() {
+    app_state=STATE_GAME;
     iBlock();
     iPlayer();
     // drawqueue[i].pos.x=player.pos.x,drawqueue[i].pos.y=player.pos.y,drawqueue[i].pos.z=player.pos.z;
@@ -383,6 +392,12 @@ void iMouse(int button, int state, int mx, int my) {
     //     // place your codes here
     // }
     if (app_state==STATE_MENU) {
+        if (button==GLUT_LEFT_BUTTON && state==GLUT_DOWN) {
+            if (mx>width/2-100&&mx<width/2+100&&my>height/2-20&&my<height/2+20) {
+                // start menu clicked
+                iGame();
+            }
+        }
 
     } else if (app_state==STATE_EDITOR) {
 
@@ -464,7 +479,6 @@ int main(int argc, char *argv[])
     glutInit(&argc, argv);
     iSetTransparency(1);
     printf("%d\n",sizeof(blocksPos3d)/sizeof(blocksPos3d[0]));
-    iGame();
     iInitialize(width, height, "Q*Bert");
     return 0;
 }
