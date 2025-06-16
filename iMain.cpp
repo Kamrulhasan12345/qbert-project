@@ -237,6 +237,40 @@ void iPlayer() {
     player.jump.active=0;
 }
 
+void iPlayerMove(int x, int y, int z) {
+    printf("%d %d %d\n",x,y,z);
+    if (!(x>=0&&x<MAX_SIZE&&y>=0&&y<MAX_SIZE&&z>=0&&z<MAX_SIZE)) {
+        // die and reset
+        printf("so, %d %d %d is invalid\n",x,y,z);
+        return;
+    }
+    if ((y-1>=0&&tiles[y-1][x][z].valid) && 1) {
+        printf("so, up?\n");
+        if (y-2>=-1&&!tiles[y-2][x][z].valid) {
+            printf("so, up one block actually?\n");
+            player.pos.x=x,player.pos.y=y-1,player.pos.z=z;
+            printf("%lf %lf %lf\n",player.pos.x,player.pos.y,player.pos.z);
+        }
+        // then go, otherwise stay where you are
+    } else if (tiles[y][x][z].valid) {
+        // simply walk to this one, with no jump anim
+        printf("so walk straight?\n");
+        player.pos.x=x,player.pos.y=y,player.pos.z=z;
+    } else if (y+1<=MAX_SIZE&&tiles[y+1][x][z].valid) {
+        // then move to this one, still a jump anim
+        printf("so down one block?\n");
+        player.pos.x=x,player.pos.y=y+1,player.pos.z=z;
+    } else {
+        // dont move
+        printf("huh? no move? thats boring...\n");
+        return;
+    }
+    // now initiate movement and jump animation
+    printf("time to go... yay!!!\n");
+    printf("%lf %lf %lf\n",player.pos.x,player.pos.y,player.pos.z);
+    return;
+}
+
 void iGame() {
     iBlock();
     iPlayer();
@@ -311,7 +345,7 @@ void iDraw() {
         char pos[50];
         snprintf(pos, 50, "%d, %d, %d",(int)player.pos.x, (int)player.pos.y, (int)player.pos.z);
         iText(10, 10, pos,GLUT_BITMAP_TIMES_ROMAN_24);
-        iGame();
+        // iGame();
         iDrawQueue();
     } else if (app_state==STATE_EDITOR) {
         iBlock();
@@ -415,28 +449,10 @@ void iSpecialKeyboard(unsigned char key)
     } else if (app_state==STATE_GAME) {
         switch(key) {
             case GLUT_KEY_END: break;
-            case GLUT_KEY_LEFT: {
-                int x= player.pos.x, y=player.pos.y,z = player.pos.z-1;
-                if (!(x>=0&&x<MAX_SIZE&&y>=0&&y<MAX_SIZE&&z>=0&&z<MAX_SIZE)) {
-                    // die and reset
-                    break;
-                }
-                if (tiles[y][x][z].valid) {
-                    // simply walk to this one, with no jump anim
-                } else if (tiles[y+1][x][z].valid && !tiles[y+2][x][z].valid) {
-                    // then move to this one, and do a jump anim
-                } else if (tiles[y-1][x][z].valid) {
-                    // then move to this one, still a jump anim
-                } else {
-                    // dont move or die
-                    break;
-                }
-                // now initiate movement and jump animation
-                break;
-            }
-            case GLUT_KEY_RIGHT: break;
-            case GLUT_KEY_UP: break;
-            case GLUT_KEY_DOWN: break;
+            case GLUT_KEY_LEFT: iPlayerMove(player.pos.x, player.pos.y,player.pos.z-1); break;
+            case GLUT_KEY_RIGHT: iPlayerMove(player.pos.x, player.pos.y,player.pos.z+1); break;
+            case GLUT_KEY_UP: iPlayerMove(player.pos.x-1, player.pos.y,player.pos.z); break;
+            case GLUT_KEY_DOWN: iPlayerMove(player.pos.x+1, player.pos.y,player.pos.z); break;
             default: break;
         }
     }
@@ -448,6 +464,7 @@ int main(int argc, char *argv[])
     glutInit(&argc, argv);
     iSetTransparency(1);
     printf("%d\n",sizeof(blocksPos3d)/sizeof(blocksPos3d[0]));
+    iGame();
     iInitialize(width, height, "Q*Bert");
     return 0;
 }
