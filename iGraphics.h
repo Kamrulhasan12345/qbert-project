@@ -1,12 +1,15 @@
 //
 //  Original Author: S. M. Shahriar Nirjon
-//  last modified: May 16, 2025 (Mahir Labib Dihan)
+//  last modified: Jun 24, 2025 (Mahir Labib Dihan)
 //
 //  Version: 2.0.2012.2015.2024.2025
 //
 
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+#include <tuple>
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef _WIN32
@@ -35,6 +38,7 @@ typedef struct
 {
     unsigned char *data;
     int width, height, channels;
+    GLuint textureId; // OpenGL texture ID
 } Image;
 
 typedef struct
@@ -44,17 +48,21 @@ typedef struct
     int currentFrame;
     int totalFrames;
     unsigned char *collisionMask;
-    int ignoreColor;
+    // int ignoreColor;
 
     // Tracking transformation
     float scale;
     bool flipHorizontal, flipVertical;
+    float rotation;                         // in radians
+    float rotationCenterX, rotationCenterY; // Center of rotation relative to the sprite's top-left corner
 } Sprite;
 
 enum MirrorState
 {
+    NO_MIRROR,
     HORIZONTAL,
-    VERTICAL
+    VERTICAL,
+    MIRROR_BOTH
 };
 
 int iScreenHeight, iScreenWidth;
@@ -78,6 +86,16 @@ void iMouseMove(int, int); // New function
 void iMouse(int button, int state, int x, int y);
 void iMouseWheel(int dir, int x, int y);
 // void iResize(int width, int height);
+
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define swap(a, b)            \
+    do                        \
+    {                         \
+        typeof(a) temp = (a); \
+        (a) = (b);            \
+        (b) = temp;           \
+    } while (0)
 
 #ifdef WIN32
 
@@ -135,9 +153,80 @@ void iResumeTimer(int index)
     }
 }
 
-// Additional functions for displaying images
+void iUpdateTexture(Image *img, bool resized = false)
+{
+    if (!img->textureId)
+    {
+        return; // No texture to update
+    }
+    glBindTexture(GL_TEXTURE_2D, img->textureId);
+    GLenum format = (img->channels == 4) ? GL_RGBA : GL_RGB;
 
-bool iLoadImage(Image *img, const char filename[])
+    if (resized)
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, format,
+                     img->width, img->height, 0,
+                     format, GL_UNSIGNED_BYTE, img->data);
+    }
+    else
+    {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                        img->width, img->height,
+                        format, GL_UNSIGNED_BYTE, img->data);
+    }
+}
+
+void iIgnorePixels(Image *img, int ignoreColor = -1)
+{
+    if (ignoreColor == -1 || img->data == nullptr)
+        return;
+
+    unsigned char ignoreR = (ignoreColor >> 16) & 0xFF;
+    unsigned char ignoreG = (ignoreColor >> 8) & 0xFF;
+    unsigned char ignoreB = ignoreColor & 0xFF;
+
+    for (int i = 0; i < img->width * img->height * img->channels; i += img->channels)
+    {
+        if (img->data[i] == ignoreR && img->data[i + 1] == ignoreG && img->data[i + 2] == ignoreB)
+        {
+            if (img->channels == 4)
+            {
+                img->data[i + 3] = 0; // Set alpha to 0 for transparency
+            }
+            else
+            {
+                img->data[i] = img->data[i + 1] = img->data[i + 2] = 0; // Set RGB to black
+            }
+        }
+    }
+
+    iUpdateTexture(img); // Update the OpenGL texture after modifying pixel data
+}
+
+bool iLoadTexture(Image *img)
+{
+    GLuint texId;
+    glGenTextures(1, &texId);
+    glBindTexture(GL_TEXTURE_2D, texId);
+
+    // Set texture parameters ONCE
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
+    // Determine format
+    GLenum format = (img->channels == 4) ? GL_RGBA : GL_RGB;
+
+    // Upload texture data
+    glTexImage2D(GL_TEXTURE_2D, 0, format, img->width, img->height,
+                 0, format, GL_UNSIGNED_BYTE, img->data);
+
+    img->textureId = texId;
+    return true;
+}
+
+// Additional functions for displaying images
+bool iLoadImage(Image *img, const char filename[], int ignoreColor = -1)
 {
     stbi_set_flip_vertically_on_load(true);
     img->data = stbi_load(filename, &img->width, &img->height, &img->channels, 0);
@@ -146,15 +235,109 @@ bool iLoadImage(Image *img, const char filename[])
         printf("Failed to load image: %s\n", stbi_failure_reason());
         return false;
     }
+
+    // Ignore the pixels with the specified ignore color
+    iIgnorePixels(img, ignoreColor);
+    img->textureId = 0; // Initialize texture ID to 0
     return true;
+}
+
+void iFreeTexture(Image *img)
+{
+    if (!img || img->textureId == 0)
+        return;
+    glDeleteTextures(1, &img->textureId);
+    img->textureId = 0; // Reset texture ID after deletion
 }
 
 void iFreeImage(Image *img)
 {
+    iFreeTexture(img);
     stbi_image_free(img->data);
 }
 
-void iShowImage2(int x, int y, Image *img, int ignoreColor)
+void iLine(double x1, double y1, double x2, double y2)
+{
+    glBegin(GL_LINE_STRIP);
+    glVertex2f(x1, y1);
+    glVertex2f(x2, y2);
+    glEnd();
+}
+
+void iRectangle(double left, double bottom, double dx, double dy)
+{
+    double x1, y1, x2, y2;
+
+    x1 = left;
+    y1 = bottom;
+    x2 = x1 + dx;
+    y2 = y1 + dy;
+
+    iLine(x1, y1, x2, y1);
+    iLine(x2, y1, x2, y2);
+    iLine(x2, y2, x1, y2);
+    iLine(x1, y2, x1, y1);
+}
+
+void iShowTexture2(int x, int y, Image *img, int width = -1, int height = -1, MirrorState mirror = NO_MIRROR)
+{
+    int imgWidth = width == -1 ? img->width : width;
+    int imgHeight = height == -1 ? img->height : height;
+
+    if (x + imgWidth <= 0 || y + imgHeight <= 0 || x >= iScreenWidth || y >= iScreenHeight)
+        return;
+    if (img->textureId == 0)
+    {
+        if (!iLoadTexture(img))
+        {
+            printf("Failed to load texture for image at (%d, %d)\n", x, y);
+            return;
+        }
+    }
+
+    // iRectangle(x, y, imgWidth, imgHeight); // Uncomment for debugging rectangle bounds
+
+    glBindTexture(GL_TEXTURE_2D, img->textureId);
+
+    glEnable(GL_TEXTURE_2D);
+
+    glBegin(GL_QUADS);
+
+    float tx1 = 0.0f, ty1 = 0.0f;
+    float tx2 = 1.0f, ty2 = 1.0f;
+
+    // Handle mirror states
+    if (mirror == HORIZONTAL || mirror == MIRROR_BOTH)
+        swap(tx1, tx2);
+    if (mirror == VERTICAL || mirror == MIRROR_BOTH)
+        swap(ty1, ty2);
+
+    glTexCoord2f(tx1, ty1);
+    glVertex2i(x, y);
+    glTexCoord2f(tx2, ty1);
+    glVertex2i(x + imgWidth, y);
+    glTexCoord2f(tx2, ty2);
+    glVertex2i(x + imgWidth, y + imgHeight);
+    glTexCoord2f(tx1, ty2);
+    glVertex2i(x, y + imgHeight);
+
+    glEnd();
+    glDisable(GL_TEXTURE_2D);
+}
+
+void iShowTexture(int x, int y, const char *filename, int width = -1, int height = -1, MirrorState mirror = NO_MIRROR, int ignoreColor = -1)
+{
+    Image img;
+    if (!iLoadImage(&img, filename, ignoreColor))
+    {
+        return;
+    }
+
+    iShowTexture2(x, y, &img, width, height, mirror);
+    iFreeImage(&img);
+}
+
+void iShowImage2(int x, int y, Image *img)
 {
     int imgWidth = img->width;
     int imgHeight = img->height;
@@ -167,39 +350,24 @@ void iShowImage2(int x, int y, Image *img, int ignoreColor)
     int screenWidth = viewport[2];
     int screenHeight = viewport[3];
 
-    // Determine visible region
-    int startX = 0, startY = 0;
-    int drawX = x, drawY = y;
-    int drawWidth = imgWidth;
-    int drawHeight = imgHeight;
-
-    // Clip left
-    if (x < 0)
+    // Fast path: no clipping needed
+    if (x >= 0 && y >= 0)
     {
-        startX = -x;
-        drawX = 0;
-        drawWidth -= startX;
+        glRasterPos2i(x, y);
+        glDrawPixels(imgWidth, imgHeight,
+                     (channels == 4) ? GL_RGBA : GL_RGB,
+                     GL_UNSIGNED_BYTE, data);
+        return;
     }
 
-    // Clip bottom
-    if (y < 0)
-    {
-        startY = -y;
-        drawY = 0;
-        drawHeight -= startY;
-    }
+    // Improved visible region calculation with clamping
+    int startX = max(0, -x);
+    int startY = max(0, -y);
+    int drawX = max(0, x);
+    int drawY = max(0, y);
 
-    // Clip right
-    if (drawX + drawWidth > screenWidth)
-    {
-        drawWidth = screenWidth - drawX;
-    }
-
-    // Clip top
-    if (drawY + drawHeight > screenHeight)
-    {
-        drawHeight = screenHeight - drawY;
-    }
+    int drawWidth = min(imgWidth - startX, screenWidth - drawX);
+    int drawHeight = min(imgHeight - startY, screenHeight - drawY);
 
     // Don't draw if completely out of bounds
     if (drawWidth <= 0 || drawHeight <= 0)
@@ -207,94 +375,79 @@ void iShowImage2(int x, int y, Image *img, int ignoreColor)
 
     // Create a buffer for the clipped image
     unsigned char *clippedData = new unsigned char[drawWidth * drawHeight * channels];
+    int srcStride = imgWidth * channels;
+    int dstStride = drawWidth * channels;
 
-    for (int y = 0; y < drawHeight; y++)
+    unsigned char *dstPtr = clippedData;
+    unsigned char *srcPtr = data + startY * srcStride + startX * channels;
+
+    for (int dy = 0; dy < drawHeight; dy++)
     {
-        for (int x = 0; x < drawWidth; x++)
-        {
-            int srcX = startX + x;
-            int srcY = startY + y;
-            int srcIndex = (srcY * imgWidth + srcX) * channels;
-            int dstIndex = (y * drawWidth + x) * channels;
-
-            // Copy and optionally ignore color
-            unsigned char r = data[srcIndex];
-            unsigned char g = data[srcIndex + 1];
-            unsigned char b = data[srcIndex + 2];
-            bool ignore = (ignoreColor != -1 &&
-                           r == (ignoreColor >> 16 & 0xFF) &&
-                           g == ((ignoreColor >> 8) & 0xFF) &&
-                           b == ((ignoreColor) & 0xFF));
-
-            if (ignore)
-            {
-                clippedData[dstIndex + 0] = 0;
-                clippedData[dstIndex + 1] = 0;
-                clippedData[dstIndex + 2] = 0;
-                if (channels == 4)
-                    clippedData[dstIndex + 3] = 0;
-            }
-            else
-            {
-                for (int c = 0; c < channels; c++)
-                {
-                    clippedData[dstIndex + c] = data[srcIndex + c];
-                }
-            }
-        }
+        memcpy(dstPtr, srcPtr, dstStride);
+        dstPtr += dstStride;
+        srcPtr += srcStride;
     }
 
     glRasterPos2i(drawX, drawY);
     glDrawPixels(drawWidth, drawHeight, (channels == 4) ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, clippedData);
-
     delete[] clippedData;
 }
 
-void iShowLoadedImage(int x, int y, Image *img)
+void iShowLoadedTexture(int x, int y, Image *img, int width = -1, int height = -1, MirrorState mirror = NO_MIRROR)
 {
-    iShowImage2(x, y, img, -1 /* ignoreColor */);
+    iShowTexture2(x, y, img, width, height, mirror);
 }
 
-void iShowImage(int x, int y, const char *filename)
+void iShowLoadedImage(int x, int y, Image *img, int width = -1, int height = -1, MirrorState mirror = NO_MIRROR)
+{
+    iShowTexture2(x, y, img, width, height, mirror);
+}
+
+void iShowImage(int x, int y, const char *filename, int width = -1, int height = -1, MirrorState mirror = NO_MIRROR, int ignoreColor = -1)
 {
     Image img;
-    if (!iLoadImage(&img, filename))
+    if (!iLoadImage(&img, filename, ignoreColor))
     {
         printf("Failed to load image: %s\n", filename);
         return;
     }
-    iShowImage2(x, y, &img, -1 /* ignoreColor */);
+    iShowTexture2(x, y, &img, width, height, mirror);
     iFreeImage(&img);
 }
 
-void iWrapImage(Image *img, int dx)
+void iWrapImage(Image *img, int dx = 0, int dy = 0)
 {
-    // Circular shift the image horizontally by dx pixels (positive = right, negative = left)
+    // Circular shift the image horizontally by dx and vertically by dy pixels
     int width = img->width;
     int height = img->height;
     int channels = img->channels;
     unsigned char *data = img->data;
     unsigned char *wrappedData = new unsigned char[width * height * channels];
 
-    // Normalize dx to be within [0, width)
+    // Normalize dx to [0, width), dy to [0, height)
     dx = ((dx % width) + width) % width;
+    dy = ((dy % height) + height) % height;
 
     for (int y = 0; y < height; y++)
     {
         for (int x = 0; x < width; x++)
         {
-            int index = (y * width + x) * channels;
+            int srcIndex = (y * width + x) * channels;
             int wrappedX = (x + dx) % width;
-            int wrappedIndex = (y * width + wrappedX) * channels;
+            int wrappedY = (y + dy) % height;
+            int dstIndex = (wrappedY * width + wrappedX) * channels;
+
             for (int c = 0; c < channels; c++)
             {
-                wrappedData[wrappedIndex + c] = data[index + c];
+                wrappedData[dstIndex + c] = data[srcIndex + c];
             }
         }
     }
 
     stbi_image_free(data);
     img->data = wrappedData;
+
+    iUpdateTexture(img);
 }
 
 void iResizeImage(Image *img, int width, int height)
@@ -309,6 +462,8 @@ void iResizeImage(Image *img, int width, int height)
     img->data = resizedData;
     img->width = width;
     img->height = height;
+
+    iUpdateTexture(img, true); // Update OpenGL texture after resizing
 }
 
 void iScaleImage(Image *img, double scale)
@@ -332,6 +487,8 @@ void iScaleImage(Image *img, double scale)
     img->data = resizedData;
     img->width = newWidth;
     img->height = newHeight;
+
+    iUpdateTexture(img, true); // Update OpenGL texture after scaling
 }
 
 void iMirrorImage(Image *img, MirrorState state)
@@ -374,6 +531,8 @@ void iMirrorImage(Image *img, MirrorState state)
     }
     stbi_image_free(data);
     img->data = mirroredData;
+
+    iUpdateTexture(img); // Update OpenGL texture after mirroring
 }
 
 // ignorecolor = hex color code 0xRRGGBB
@@ -383,13 +542,6 @@ void iUpdateCollisionMask(Sprite *s)
     {
         return;
     }
-    int ignorecolor = s->ignoreColor;
-    // if (ignorecolor == -1)
-    // {
-    //     s->collisionMask = nullptr;
-    //     return;
-    // }
-
     Image *frame = &s->frames[s->currentFrame];
     int width = frame->width;
     int height = frame->height;
@@ -408,17 +560,9 @@ void iUpdateCollisionMask(Sprite *s)
         for (int x = 0; x < width; x++)
         {
             int index = (y * width + x) * channels;
-
-            unsigned char r = data[index];
-            unsigned char g = (channels > 1) ? data[index + 1] : 0;
-            unsigned char b = (channels > 2) ? data[index + 2] : 0;
             unsigned char a = (channels == 4) ? data[index + 3] : 255;
-
             bool isTransparent = (channels == 4 && a == 0);
-
-            bool isIgnoredColor = (ignorecolor == -1 ? false : ((r == (ignorecolor >> 16 & 0xFF)) && (g == ((ignorecolor >> 8) & 0xFF)) && (b == ((ignorecolor) & 0xFF))));
-
-            collisionMask[y * width + x] = (isTransparent || isIgnoredColor) ? 0 : 1;
+            collisionMask[y * width + x] = (isTransparent) ? 0 : 1;
         }
     }
     s->collisionMask = collisionMask;
@@ -426,65 +570,193 @@ void iUpdateCollisionMask(Sprite *s)
 
 int iCheckCollision(Sprite *s1, Sprite *s2)
 {
-    if (!s1 || !s2)
-    {
+    // Early exit if invalid sprites or missing frames/masks
+    if (!s1 || !s2 || !s1->frames || !s2->frames || !s1->collisionMask || !s2->collisionMask)
         return 0;
-    }
 
-    if (!s1->frames || !s2->frames)
+    Image *frame1 = &s1->frames[s1->currentFrame];
+    Image *frame2 = &s2->frames[s2->currentFrame];
+    int w1 = frame1->width, h1 = frame1->height;
+    int w2 = frame2->width, h2 = frame2->height;
+
+    // Convert rotation angles to radians
+    float theta1 = s1->rotation * (3.14159265f / 180.0f);
+    float theta2 = s2->rotation * (3.14159265f / 180.0f);
+    float cos1 = cosf(theta1), sin1 = sinf(theta1);
+    float cos2 = cosf(theta2), sin2 = sinf(theta2);
+
+    // Helper function to compute rotated AABB (global pivot version)
+    auto computeRotatedAABB = [](float x, float y, int w, int h,
+                                 float pivotX, float pivotY,
+                                 float cosT, float sinT)
     {
-        return 0;
-    }
+        // Calculate local pivot offset (from sprite origin to rotation center)
+        float localPivotX = pivotX - x;
+        float localPivotY = pivotY - y;
 
-    int width1 = s1->frames[s1->currentFrame].width;
-    int height1 = s1->frames[s1->currentFrame].height;
-    unsigned char *collisionMask1 = s1->collisionMask;
+        // Corners relative to sprite origin
+        float cornersX[4] = {0, (float)w, 0, (float)w};
+        float cornersY[4] = {0, 0, (float)h, (float)h};
 
-    int width2 = s2->frames[s2->currentFrame].width;
-    int height2 = s2->frames[s2->currentFrame].height;
-    unsigned char *collisionMask2 = s2->collisionMask;
+        float minX = INFINITY, maxX = -INFINITY;
+        float minY = INFINITY, maxY = -INFINITY;
 
-    int x1 = s1->x;
-    int y1 = s1->y;
-    int x2 = s2->x;
-    int y2 = s2->y;
-    // check if the two images overlap
-    int startX = (x1 > x2) ? x1 : x2;
-    int endX = (x1 + width1 < x2 + width2) ? x1 + width1 : x2 + width2;
-    int startY = (y1 > y2) ? y1 : y2;
-    int endY = (y1 + height1 < y2 + height2) ? y1 + height1 : y2 + height2;
-    int noOverlap = startX >= endX || startY >= endY;
-
-    // If collisionMasks are not set, check the whole image for collision
-    if (collisionMask1 == nullptr || collisionMask2 == nullptr)
-    {
-        return noOverlap ? 0 : 1;
-    }
-    // now collisionMasks are set. Check only the overlapping region
-    if (noOverlap)
-    {
-        return 0;
-    }
-
-    for (int y = startY; y < endY; y++)
-    {
-        for (int x = startX; x < endX; x++)
+        for (int i = 0; i < 4; i++)
         {
-            int ix1 = x - x1;
-            int iy1 = y - y1;
-            int ix2 = x - x2;
-            int iy2 = y - y2;
+            // Get corner relative to pivot
+            float dx = cornersX[i] - localPivotX;
+            float dy = cornersY[i] - localPivotY;
 
-            int index1 = iy1 * width1 + ix1;
-            int index2 = iy2 * width2 + ix2;
-            if (collisionMask1[index1] && collisionMask2[index2])
+            // Rotate around pivot
+            float rx = x + localPivotX + (cosT * dx - sinT * dy);
+            float ry = y + localPivotY + (sinT * dx + cosT * dy);
+
+            minX = fminf(minX, rx);
+            maxX = fmaxf(maxX, rx);
+            minY = fminf(minY, ry);
+            maxY = fmaxf(maxY, ry);
+        }
+        return std::make_tuple(minX, maxX, minY, maxY);
+    };
+
+    // Compute rotated bounding boxes
+    float minX1, maxX1, minY1, maxY1;
+    std::tie(minX1, maxX1, minY1, maxY1) =
+        computeRotatedAABB(s1->x, s1->y, w1, h1,
+                           s1->rotationCenterX, s1->rotationCenterY,
+                           cos1, sin1);
+
+    float minX2, maxX2, minY2, maxY2;
+    std::tie(minX2, maxX2, minY2, maxY2) =
+        computeRotatedAABB(s2->x, s2->y, w2, h2,
+                           s2->rotationCenterX, s2->rotationCenterY,
+                           cos2, sin2);
+
+    // Find overlap area
+    int overlapMinX = (int)fmaxf(minX1, minX2);
+    int overlapMaxX = (int)fminf(maxX1, maxX2);
+    int overlapMinY = (int)fmaxf(minY1, minY2);
+    int overlapMaxY = (int)fminf(maxY1, maxY2);
+
+    if (overlapMinX >= overlapMaxX || overlapMinY >= overlapMaxY)
+        return 0; // No AABB overlap
+
+    // printf("AABB Overlap\n");
+
+    // Precompute inverse rotations (for screen-to-local transform)
+    float invCos1 = cos1, invSin1 = -sin1; // cos(-θ) = cos(θ), sin(-θ) = -sin(θ)
+    float invCos2 = cos2, invSin2 = -sin2;
+
+    // Pixel-perfect check in overlap region
+    for (int y = overlapMinY; y <= overlapMaxY; y++)
+    {
+        for (int x = overlapMinX; x <= overlapMaxX; x++)
+        {
+            // Transform to Sprite 1's local space
+            float dx1 = x - s1->rotationCenterX;
+            float dy1 = y - s1->rotationCenterY;
+            float localX1 = invCos1 * dx1 - invSin1 * dy1 + (s1->rotationCenterX - s1->x);
+            float localY1 = invSin1 * dx1 + invCos1 * dy1 + (s1->rotationCenterY - s1->y);
+
+            if (localX1 < 0 || localY1 < 0 || localX1 >= w1 || localY1 >= h1)
+                continue;
+
+            // Transform to Sprite 2's local space
+            float dx2 = x - s2->rotationCenterX;
+            float dy2 = y - s2->rotationCenterY;
+            float localX2 = invCos2 * dx2 - invSin2 * dy2 + (s2->rotationCenterX - s2->x);
+            float localY2 = invSin2 * dx2 + invCos2 * dy2 + (s2->rotationCenterY - s2->y);
+
+            if (localX2 < 0 || localY2 < 0 || localX2 >= w2 || localY2 >= h2)
+                continue;
+
+            // Check collision masks (with nearest-neighbor sampling)
+            int ix1 = (int)localX1, iy1 = (int)localY1;
+            int ix2 = (int)localX2, iy2 = (int)localY2;
+
+            if (ix1 >= 0 && iy1 >= 0 && ix1 < w1 && iy1 < h1 &&
+                ix2 >= 0 && iy2 >= 0 && ix2 < w2 && iy2 < h2)
             {
-                return 1;
+                int idx1 = iy1 * w1 + ix1;
+                int idx2 = iy2 * w2 + ix2;
+                if (s1->collisionMask[idx1] && s2->collisionMask[idx2])
+                    return 1; // Collision detected
             }
         }
     }
-    return 0;
+
+    return 0; // No collision found
 }
+void iRotateSprite(Sprite *s, double x, double y, double degree)
+{
+    if (!s)
+        return;
+    s->rotation = degree;
+    s->rotationCenterX = x;
+    s->rotationCenterY = y;
+}
+
+// int iCheckCollision(Sprite *s1, Sprite *s2)
+// {
+//     if (!s1 || !s2)
+//     {
+//         return 0;
+//     }
+
+//     if (!s1->frames || !s2->frames)
+//     {
+//         return 0;
+//     }
+
+//     int width1 = s1->frames[s1->currentFrame].width;
+//     int height1 = s1->frames[s1->currentFrame].height;
+//     unsigned char *collisionMask1 = s1->collisionMask;
+
+//     int width2 = s2->frames[s2->currentFrame].width;
+//     int height2 = s2->frames[s2->currentFrame].height;
+//     unsigned char *collisionMask2 = s2->collisionMask;
+
+//     int x1 = s1->x;
+//     int y1 = s1->y;
+//     int x2 = s2->x;
+//     int y2 = s2->y;
+//     // check if the two images overlap
+//     int startX = (x1 > x2) ? x1 : x2;
+//     int endX = (x1 + width1 < x2 + width2) ? x1 + width1 : x2 + width2;
+//     int startY = (y1 > y2) ? y1 : y2;
+//     int endY = (y1 + height1 < y2 + height2) ? y1 + height1 : y2 + height2;
+//     int noOverlap = startX >= endX || startY >= endY;
+
+//     // If collisionMasks are not set, check the whole image for collision
+//     if (collisionMask1 == nullptr || collisionMask2 == nullptr)
+//     {
+//         return noOverlap ? 0 : 1;
+//     }
+//     // now collisionMasks are set. Check only the overlapping region
+//     if (noOverlap)
+//     {
+//         return 0;
+//     }
+
+//     for (int y = startY; y < endY; y++)
+//     {
+//         for (int x = startX; x < endX; x++)
+//         {
+//             int ix1 = x - x1;
+//             int iy1 = y - y1;
+//             int ix2 = x - x2;
+//             int iy2 = y - y2;
+
+//             int index1 = iy1 * width1 + ix1;
+//             int index2 = iy2 * width2 + ix2;
+//             if (collisionMask1[index1] && collisionMask2[index2])
+//             {
+//                 return 1;
+//             }
+//         }
+//     }
+//     return 0;
+// }
 
 void iAnimateSprite(Sprite *sprite)
 {
@@ -502,12 +774,28 @@ int compareFilenames(const void *a, const void *b)
     const char *strB = *(const char **)b;
     return strcmp(strA, strB);
 }
+void iAllocateTexture(Image *img)
+{
+    GLuint texId;
+    glGenTextures(1, &texId);
+    glBindTexture(GL_TEXTURE_2D, texId);
+    // Set texture parameters ONCE
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+    // Determine format
+    GLenum format = (img->channels == 4) ? GL_RGBA : GL_RGB;
+    // Upload texture data
+    glTexImage2D(GL_TEXTURE_2D, 0, format, img->width, img->height,
+                 0, format, GL_UNSIGNED_BYTE, img->data);
+    img->textureId = texId;
+}
 
-void iLoadFramesFromSheet(Image *frames, const char *filename, int rows, int cols)
+void iLoadFramesFromSheet(Image *frames, const char *filename, int rows, int cols, int ignoreColor = -1)
 {
     // Load the sprite sheet image
     Image tmp;
-    iLoadImage(&tmp, filename);
+    iLoadImage(&tmp, filename, ignoreColor);
 
     int frameWidth = tmp.width / cols;
     int frameHeight = tmp.height / rows;
@@ -544,6 +832,8 @@ void iLoadFramesFromSheet(Image *frames, const char *filename, int rows, int col
                 }
             }
         }
+
+        // iAllocateTexture(frame); // Set the texture ID for the frame
     }
 
     delete[] tmp.data;
@@ -552,7 +842,7 @@ void iLoadFramesFromSheet(Image *frames, const char *filename, int rows, int col
 #define MAX_FILES 1024
 #define MAX_FILENAME_LEN 512
 
-void iLoadFramesFromFolder(Image *frames, const char *folderPath)
+void iLoadFramesFromFolder(Image *frames, const char *folderPath, int ignoreColor = -1)
 {
     DIR *dir = opendir(folderPath);
     if (dir == nullptr)
@@ -595,18 +885,18 @@ void iLoadFramesFromFolder(Image *frames, const char *folderPath)
     {
         char fullPath[MAX_FILENAME_LEN];
         snprintf(fullPath, sizeof(fullPath), "%s/%s", folderPath, filenames[i]);
-        iLoadImage(&frames[i], fullPath);
+        iLoadImage(&frames[i], fullPath, ignoreColor);
         free(filenames[i]); // free allocated memory
     }
 }
 
-void iInitSprite(Sprite *s, int ignoreColor = -1)
+void iInitSprite(Sprite *s)
 {
     s->x = 0;
     s->y = 0;
 
     s->collisionMask = nullptr;
-    s->ignoreColor = ignoreColor;
+    // s->ignoreColor = ignoreColor;
 
     // Assign the pre-loaded frames to the sprite
     s->currentFrame = -1;
@@ -615,6 +905,9 @@ void iInitSprite(Sprite *s, int ignoreColor = -1)
     s->scale = 1.0f;           // Initialize scale
     s->flipHorizontal = false; // Initialize flip state
     s->flipVertical = false;   // Initialize flip state
+    s->rotation = 0.0f;        // Initialize rotation angle
+    s->rotationCenterX = 0.0f; // Initialize rotation center X
+    s->rotationCenterY = 0.0f; // Initialize rotation center Y
 }
 
 void deepCopyImage(Image src, Image *dst)
@@ -623,6 +916,7 @@ void deepCopyImage(Image src, Image *dst)
     dst->width = src.width;
     dst->height = src.height;
     dst->channels = src.channels;
+    dst->textureId = 0; // Copy texture ID
 
     // Allocate memory for the image data in the destination
     dst->data = (unsigned char *)malloc(src.width * src.height * src.channels);
@@ -635,6 +929,7 @@ void deepCopyImage(Image src, Image *dst)
 
     // Copy the image data byte-by-byte
     memcpy(dst->data, src.data, src.width * src.height * src.channels);
+    // iAllocateTexture(dst); // Set the texture ID for the destination image
 }
 
 void iScaleSprite(Sprite *s, double scale)
@@ -685,7 +980,6 @@ void iChangeSpriteFrames(Sprite *s, const Image *frames, int totalFrames)
         if (s->flipVertical)
             iMirrorImage(frame, VERTICAL);
     }
-
     iUpdateCollisionMask(s);
 }
 
@@ -695,12 +989,53 @@ void iSetSpritePosition(Sprite *s, int x, int y)
     s->y = y;
 }
 
+//
+// Rotates the co-ordinate system
+// Parameters:
+//  (x, y) - The pivot point for rotation
+//  degree - degree of rotation
+//
+// After calling iRotate(), every subsequent rendering will
+// happen in rotated fashion. To stop rotation of subsequent rendering,
+// call iUnRotate(). Typical call pattern would be:
+//      iRotate();
+//      Render your objects, that you want rendered as rotated
+//      iUnRotate();
+//
+void iRotate(double x, double y, double degree)
+{
+    // push the current matrix stack
+    glPushMatrix();
+    //
+    // The below steps take effect in reverse order
+    //
+    // step 3: undo the translation
+    glTranslatef(x, y, 0.0);
+
+    // step 2: rotate the co-ordinate system across z-axis
+    glRotatef(degree, 0, 0, 1.0);
+
+    // step 1: translate the origin to (x, y)
+    glTranslatef(-x, -y, 0.0);
+}
+
+void iUnRotate()
+{
+    glPopMatrix();
+}
+
 void iShowSprite(const Sprite *s)
 {
     if (!s || !s->frames)
+    {
         return;
-
-    iShowImage2(s->x, s->y, &s->frames[s->currentFrame], s->ignoreColor);
+    }
+    iRotate(
+        s->rotationCenterX,
+        s->rotationCenterY,
+        s->rotation);
+    iShowTexture2(s->x, s->y, &s->frames[s->currentFrame]);
+    iUnRotate();
 }
 
 void iResizeSprite(Sprite *s, int width, int height)
@@ -834,6 +1169,27 @@ void iTextAdvanced(double x, double y, const char *str, float scale = 0.3, float
     glPopMatrix();      // Restore transformation matrix
 }
 
+int frameCount = 0;
+int previousTime = 0;
+int fps = 0;
+
+void iShowSpeed(double x, double y)
+{
+    frameCount++;
+    int currentTime = glutGet(GLUT_ELAPSED_TIME);
+    int timeInterval = currentTime - previousTime;
+    if (timeInterval > 1000)
+    {
+        fps = (frameCount * 1000.0) / timeInterval;
+        previousTime = currentTime;
+        frameCount = 0;
+    }
+
+    char fpsText[20];
+    sprintf(fpsText, "FPS: %d", fps);
+    iText(x, y, fpsText);
+}
+
 void iPoint(double x, double y, int size = 0)
 {
     int i, j;
@@ -846,14 +1202,6 @@ void iPoint(double x, double y, int size = 0)
             glVertex2f(i, j);
         }
     }
-    glEnd();
-}
-
-void iLine(double x1, double y1, double x2, double y2)
-{
-    glBegin(GL_LINE_STRIP);
-    glVertex2f(x1, y1);
-    glVertex2f(x2, y2);
     glEnd();
 }
 
@@ -882,21 +1230,6 @@ void iPolygon(double x[], double y[], int n)
     }
     glVertex2f(x[0], y[0]);
     glEnd();
-}
-
-void iRectangle(double left, double bottom, double dx, double dy)
-{
-    double x1, y1, x2, y2;
-
-    x1 = left;
-    y1 = bottom;
-    x2 = x1 + dx;
-    y2 = y1 + dy;
-
-    iLine(x1, y1, x2, y1);
-    iLine(x2, y1, x2, y2);
-    iLine(x2, y2, x1, y2);
-    iLine(x1, y2, x1, y1);
 }
 
 void iFilledRectangle(double left, double bottom, double dx, double dy)
@@ -988,43 +1321,6 @@ void iFilledEllipse(double x, double y, double a, double b, int slices = 100)
         yp = y1;
     }
     glEnd();
-}
-
-//
-// Rotates the co-ordinate system
-// Parameters:
-//  (x, y) - The pivot point for rotation
-//  degree - degree of rotation
-//
-// After calling iRotate(), every subsequent rendering will
-// happen in rotated fashion. To stop rotation of subsequent rendering,
-// call iUnRotate(). Typical call pattern would be:
-//      iRotate();
-//      Render your objects, that you want rendered as rotated
-//      iUnRotate();
-//
-void iRotate(double x, double y, double degree)
-{
-    // push the current matrix stack
-    glPushMatrix();
-
-    //
-    // The below steps take effect in reverse order
-    //
-
-    // step 3: undo the translation
-    glTranslatef(x, y, 0.0);
-
-    // step 2: rotate the co-ordinate system across z-axis
-    glRotatef(degree, 0, 0, 1.0);
-
-    // step 1: translate the origin to (x, y)
-    glTranslatef(-x, -y, 0.0);
-}
-
-void iUnRotate()
-{
-    glPopMatrix();
 }
 
 void iSetColor(int r, int g, int b)
@@ -1180,15 +1476,14 @@ void iSetTransparentColor(int r, int g, int b, double a)
 
 void reshapeFF(int width, int height)
 {
-    // iScreenWidth = width;
-    // iScreenHeight = height;
-    // glMatrixMode(GL_PROJECTION);
-    // glLoadIdentity();
-    // // iResize(width, height);
-    // glOrtho(0.0, iScreenWidth, 0.0, iScreenHeight, -1.0, 1.0);
-    // glViewport(0.0, 0.0, iScreenWidth, iScreenHeight);
-    // glutPostRedisplay();
-    glutReshapeWindow(iSmallScreenWidth, iSmallScreenHeight);
+    iScreenWidth = width;
+    iScreenHeight = height;
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    // iResize(width, height);
+    glOrtho(0.0, iScreenWidth, 0.0, iScreenHeight, -1.0, 1.0);
+    glViewport(0.0, 0.0, iScreenWidth, iScreenHeight);
+    glutPostRedisplay();
 }
 
 void iInitialize(int width = 500, int height = 500, const char *title = "iGraphics")
@@ -1206,18 +1501,6 @@ void iInitialize(int width = 500, int height = 500, const char *title = "iGraphi
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glOrtho(0.0, width, 0.0, height, -1.0, 1.0);
-
-    // #ifdef _WIN32
-    // HWND hwnd = FindWindowA(NULL, title);
-    // if (hwnd) {
-    //     LONG style = GetWindowLong(hwnd, GWL_STYLE);
-    //     style &= ~WS_SIZEBOX; 
-    //     style &= ~WS_MAXIMIZEBOX; 
-    //     SetWindowLong(hwnd, GWL_STYLE, style);
-    //     SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
-    //         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-    // }
-    // #endif
 
     iClear();
 
@@ -1254,6 +1537,6 @@ void iInitialize(int width = 500, int height = 500, const char *title = "iGraphi
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
-
+    // glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
     glutMainLoop();
 }

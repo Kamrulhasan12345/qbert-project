@@ -10,37 +10,7 @@
 Image bg,help,life,frames[2],frames_1[2],spin_frame[6],ball_frame[2],qbert_invert[2];
 Sprite snake,qbert_jump,qbert_spin,ball,qbert_inverse;
 
-void loadresource(){
-    iLoadImage(&bg,"assets/images/title.png");
-    iLoadImage(&help,"assets/images/help.png");
-    iLoadImage(&life,"assets/images/sprites/qbert/qbert06.png");
-    iResizeImage(&help,750,700);
-    iResizeImage(&life,23,23);
-    iInitSprite(&snake,-1);
-    iInitSprite(&qbert_jump,-1);
-    iInitSprite(&qbert_spin,-1);
-    iInitSprite(&ball,-1);
-    iInitSprite(&qbert_inverse,-1);
-    iLoadFramesFromFolder(frames, "assets/images/sprites/snake");
-    iLoadFramesFromFolder(frames_1, "assets/images/sprites/qbert_jump");
-    iLoadFramesFromFolder(spin_frame, "assets/images/sprites/spin");
-    iLoadFramesFromFolder(ball_frame, "assets/images/sprites/ball");
-    iLoadFramesFromFolder(qbert_invert, "assets/images/sprites/qbert_invert");
-    iChangeSpriteFrames(&snake, frames, 2);
-    iChangeSpriteFrames(&qbert_jump, frames_1, 2);
-    iChangeSpriteFrames(&qbert_spin, spin_frame, 6);
-    iChangeSpriteFrames(&ball, ball_frame, 2);
-    iChangeSpriteFrames(&qbert_inverse, qbert_invert, 2);
-     iScaleSprite(&snake,2.0);
-     iScaleSprite(&qbert_inverse,2.0);
-     iScaleSprite(&ball,2.0);
-     iScaleSprite(&qbert_jump,2.0);
-     iSetSpritePosition(&snake, -50, 400);
-     iSetSpritePosition(&qbert_jump, -5, 400);
-     iSetSpritePosition(&qbert_spin, 400, 200);
-     iSetSpritePosition(&qbert_inverse,801,195);
-     iSetSpritePosition(&ball,850,200);
-}
+
 
 
 #define PI 3.14159265
@@ -153,7 +123,8 @@ int sound_1 = -1,sound_2=-1;
 
 double start_x=width/2;
 double start_y=height*0.9;
-double a = 30;
+double tile_width = 30;
+double tile_height = 30;
 bool sound1=true,sound2=false;
 bool selected_yes=true;
 bool selected_no=false;
@@ -186,6 +157,38 @@ int cmp_dk (const void *a, const void *b) {
     int d1 = A->pos.x+A->pos.z+(MAX_SIZE-1-A->pos.y)+A->type;
     int d2 = B->pos.x+B->pos.z+(MAX_SIZE-1-B->pos.y)+B->type;
     return (d1>d2)-(d1<d2);
+}
+
+void iLoadResource(){
+    iLoadImage(&bg,"assets/images/title.png");
+    iLoadImage(&help,"assets/images/help.png");
+    iLoadImage(&life,"assets/images/sprites/qbert/qbert06.png");
+    iResizeImage(&help,750,700);
+    iResizeImage(&life,23,23);
+    iInitSprite(&snake);
+    iInitSprite(&qbert_jump);
+    iInitSprite(&qbert_spin);
+    iInitSprite(&ball);
+    iInitSprite(&qbert_inverse);
+    iLoadFramesFromFolder(frames, "assets/images/sprites/snake");
+    iLoadFramesFromFolder(frames_1, "assets/images/sprites/qbert_jump");
+    iLoadFramesFromFolder(spin_frame, "assets/images/sprites/spin");
+    iLoadFramesFromFolder(ball_frame, "assets/images/sprites/ball");
+    iLoadFramesFromFolder(qbert_invert, "assets/images/sprites/qbert_invert");
+    iChangeSpriteFrames(&snake, frames, 2);
+    iChangeSpriteFrames(&qbert_jump, frames_1, 2);
+    iChangeSpriteFrames(&qbert_spin, spin_frame, 6);
+    iChangeSpriteFrames(&ball, ball_frame, 2);
+    iChangeSpriteFrames(&qbert_inverse, qbert_invert, 2);
+    iScaleSprite(&snake,2.0);
+    iScaleSprite(&qbert_inverse,2.0);
+    iScaleSprite(&ball,2.0);
+    iScaleSprite(&qbert_jump,2.0);
+    iSetSpritePosition(&snake, -50, 400);
+    iSetSpritePosition(&qbert_jump, -5, 400);
+    iSetSpritePosition(&qbert_spin, 400, 200);
+    iSetSpritePosition(&qbert_inverse,801,195);
+    iSetSpritePosition(&ball,850,200);
 }
 
 void iClearQueue() {
@@ -227,32 +230,32 @@ void iAnimSetting(){
 }
 
 void iTile(double x, double y) {
-    double x_coords[]={x,x+a*cos(PI/6),x,x-a*cos(PI/6)};
-    double y_coords[]={y,y-a/2,y-a,y-a/2};
+    double x_coords[]={x,x+tile_width*cos(PI/6),x,x-tile_width*cos(PI/6)};
+    double y_coords[]={y,y-tile_width/2,y-tile_width,y-tile_width/2};
     iFilledPolygon(x_coords,y_coords,4);
 }
 
 void iTileOutline(double x, double y) {
-    double x_coords[]={x,x+a*cos(PI/6),x,x-a*cos(PI/6)};
-    double y_coords[]={y,y-a/2,y-a,y-a/2};
+    double x_coords[]={x,x+tile_width*cos(PI/6),x,x-tile_width*cos(PI/6)};
+    double y_coords[]={y,y-tile_width/2,y-tile_width,y-tile_width/2};
     iPolygon(x_coords,y_coords,4);
 }
 
 void iSide(double x, double y) {
-    double x_coords[]={x,x,x+a*cos(PI/6),x+a*cos(PI/6)};
-    double y_coords[]={y-a,y-2*a,y-3*a/2,y-a/2};
+    double x_coords[]={x,x,x+tile_width*cos(PI/6),x+tile_width*cos(PI/6)};
+    double y_coords[]={y-tile_width,y-tile_width-tile_height,y-tile_width/2-tile_height,y-tile_width/2};
     iSetColor(49, 70, 70);
     iFilledPolygon(x_coords,y_coords,4);
-    x_coords[2]=x-a*cos(PI/6),x_coords[3]=x-a*cos(PI/6);
+    x_coords[2]=x-tile_width*cos(PI/6),x_coords[3]=x-tile_width*cos(PI/6);
     iSetColor(86, 169, 152);
     iFilledPolygon(x_coords,y_coords,4);
 }
 
 void iSideOutline(double x, double y) {
-    double x_coords[]={x,x,x+a*cos(PI/6),x+a*cos(PI/6)};
-    double y_coords[]={y-a,y-2*a,y-3*a/2,y-a/2};
+    double x_coords[]={x,x,x+tile_width*cos(PI/6),x+tile_width*cos(PI/6)};
+    double y_coords[]={y-tile_width,y-tile_width-tile_height,y-tile_width/2-tile_height,y-tile_width/2};
     iPolygon(x_coords,y_coords,4);
-    x_coords[2]=x-a*cos(PI/6),x_coords[3]=x-a*cos(PI/6);
+    x_coords[2]=x-tile_width*cos(PI/6),x_coords[3]=x-tile_width*cos(PI/6);
     iPolygon(x_coords,y_coords,4);
 }
 
@@ -265,7 +268,7 @@ void iDrawEnemy(enemy_t* enemy) {
     }
     // printf("%d %d %d\n",(int)enemy->km.pos.x,(int)enemy->km.pos.y,(int)enemy->km.pos.z);
     iSetColor(255,0,0);
-    iFilledCircle(start_x+(enemy->km.pos.z-enemy->km.pos.x)*a*cos(PI/6),start_y-(enemy->km.pos.z+enemy->km.pos.x)*a/2-enemy->km.pos.y*a-a/2,a/5);
+    iFilledCircle(start_x+(enemy->km.pos.z-enemy->km.pos.x)*tile_width*cos(PI/6),start_y-(enemy->km.pos.z+enemy->km.pos.x)*tile_width/2-enemy->km.pos.y*tile_height-tile_width/2,tile_width/5);
 }
 
 bool collision(player_t* player,enemy_t* enemy){
@@ -310,18 +313,18 @@ void iDrawQueue() {
             case TYPE_BLOCK: {
                 if (!editor.wireframe) {
                     iSetColor(86, 70, 239);
-                    iTile(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
-                    iSide(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
+                    iTile(start_x+(z-x)*tile_width*cos(PI/6),start_y-(z+x)*tile_width/2-y*tile_height);
+                    iSide(start_x+(z-x)*tile_width*cos(PI/6),start_y-(z+x)*tile_width/2-y*tile_height);
                 } else {
                     iSetColor(49, 70, 70);
-                    iTileOutline(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
-                    iSideOutline(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a);
+                    iTileOutline(start_x+(z-x)*tile_width*cos(PI/6),start_y-(z+x)*tile_width/2-y*tile_height);
+                    iSideOutline(start_x+(z-x)*tile_width*cos(PI/6),start_y-(z+x)*tile_width/2-y*tile_height);
                 }
                 break;
             }
             case TYPE_PLAYER: {
                 iSetTransparentColor(0,0,0,0.5);
-                iShowLoadedImage(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,&life);
+                iShowLoadedImage(start_x+(z-x)*tile_width*cos(PI/6),start_y-(z+x)*tile_width/2-y*tile_height-tile_width/2,&life); 
                 iSetColor(240,10,10);
                 //iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
                 break;
@@ -336,12 +339,12 @@ void iDrawQueue() {
 }
 
 void iGrid() {
-    double c = start_x/sqrt(3)+start_y+((int)((width-start_x)/sqrt(3)+height-start_y))*a;
+    double c = start_x/sqrt(3)+start_y+((int)((width-start_x)/sqrt(3)+height-start_y))*tile_width;
     iSetTransparentColor(255,255,255,0.25);
-    for(;c>=0;c-=a)
+    for(;c>=0;c-=tile_width)
         iLine(0,c,width,-width/sqrt(3)+c);
-    c=start_y-start_x/sqrt(3)+((int)(height-start_y+start_x/sqrt(3)))*a;
-    for(;width/sqrt(3)+c>=0;c-=a)
+    c=start_y-start_x/sqrt(3)+((int)(height-start_y+start_x/sqrt(3)))*tile_width;
+    for(;width/sqrt(3)+c>=0;c-=tile_width)
         iLine(0,c,width,width/sqrt(3)+c);
 }
 
@@ -366,11 +369,10 @@ void iMenu() {
     iTextBold(width/2-60,250,"High Score");
     iTextBold(width/2-50,185,"Credits");
     iTextBold(width/2-42,120,"Exit");
-    
-    
 }
 
 void iResume();
+
 void iSetting(){
      app_state=STATE_SETTING;
      iSetColor(32, 56, 94);
@@ -466,45 +468,49 @@ void iLoseLife(player_t * player){
     if (player ->lives >0)
     player->lives--;
    if (player-> lives ==0)
-    exit(0);
+    {
+        iMenu();
+        // we will add game over screen here
+    
+    }
     else {
-        player -> km.pos.x=4;
-        player -> km.pos.y=5;
-        player -> km.pos.z=1;
+        int ind = rand()%n;
+        player -> km.pos.x=blocksPos3d[ind][0];
+        player -> km.pos.y=blocksPos3d[ind][1];
+        player -> km.pos.z=blocksPos3d[ind][2];
     }
 }
 
 int iBodyMove(int x, int y, int z, body_t *km) {
-    printf("%d %d %d\n",x,y,z);
     if (!(x>=0&&x<MAX_SIZE&&y>=0&&y<MAX_SIZE&&z>=0&&z<MAX_SIZE)) {
         // die and reset
-        printf("so, %d %d %d is invalid\n",x,y,z);
+        // printf("so, %d %d %d is invalid\n",x,y,z);
         return 0;
     }
     if ((y-1>=0&&tiles[y-1][x][z].valid) && 1) {
-        printf("so, up?\n");
+        // printf("so, up?\n");
         if (y-2>=-1&&!tiles[y-2][x][z].valid) {
-            printf("so, up one block actually?\n");
+            // printf("so, up one block actually?\n");
             km->pos.x=x,km->pos.y=y-1,km->pos.z=z;
-            printf("%lf %lf %lf\n",km->pos.x,km->pos.y,km->pos.z);
+            // printf("%lf %lf %lf\n",km->pos.x,km->pos.y,km->pos.z);
         }
         // then go, otherwise stay where you are
     } else if (tiles[y][x][z].valid) {
         // simply walk to this one, with no jump anim
-        printf("so walk straight?\n");
+        // printf("so walk straight?\n");
         km->pos.x=x,km->pos.y=y,km->pos.z=z;
     } else if (y+1<=MAX_SIZE&&tiles[y+1][x][z].valid) {
         // then move to this one, still a jump anim
-        printf("so down one block?\n");
+        // printf("so down one block?\n");
         km->pos.x=x,km->pos.y=y+1,km->pos.z=z;
     } else {
         // dont move
-        printf("huh? no move? thats boring...\n");
+        // printf("huh? no move? thats boring...\n");
         return 0;
     }
     // now initiate movement and jump animation
-    printf("time to go... yay!!!\n");
-    printf("%lf %lf %lf\n",km->pos.x,km->pos.y,km->pos.z);
+    // printf("time to go... yay!!!\n");
+    // printf("%lf %lf %lf\n",km->pos.x,km->pos.y,km->pos.z);
     return 1;
 }
 
@@ -527,7 +533,7 @@ void iEnemyStep() {
                 break;
             }
         }
-        printf("here we go: %lf %lf %lf\n",enemies[i].km.pos.x,enemies[i].km.pos.y,enemies[i].km.pos.z);
+        // printf("here we go: %lf %lf %lf\n",enemies[i].km.pos.x,enemies[i].km.pos.y,enemies[i].km.pos.z);
     }
 }
 
@@ -769,7 +775,7 @@ void iKeyboard(unsigned char key) {
                 player.km.pos.x=0;
                 player.km.pos.y=0;
                 player.km.pos.z=0; 
-                printf("%lf %lf %lf\n",player.km.pos.x,player.km.pos.y,player.km.pos.z); 
+                // printf("%lf %lf %lf\n",player.km.pos.x,player.km.pos.y,player.km.pos.z); 
                 break;
             }            
             default: break;
@@ -813,7 +819,7 @@ int main(int argc, char *argv[])
 {
     glutInit(&argc, argv);
     iSetTransparency(1);
-    loadresource();
+    iLoadResource();
     printf("%d\n",sizeof(blocksPos3d)/sizeof(blocksPos3d[0]));
     iInitializeSound();
     sound_1=iPlaySound("assets/sounds/undertale_1.wav",true,80);  
