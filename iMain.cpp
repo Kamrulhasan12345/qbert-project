@@ -2,8 +2,46 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <time.h>
+#include<stdlib.h>
 
 #include "iGraphics.h"
+#include "iSound.h"
+
+Image bg,help,life,frames[2],frames_1[2],spin_frame[6],ball_frame[2],qbert_invert[2];
+Sprite snake,qbert_jump,qbert_spin,ball,qbert_inverse;
+
+void loadresource(){
+    iLoadImage(&bg,"assets/images/title.png");
+    iLoadImage(&help,"assets/images/help.png");
+    iLoadImage(&life,"assets/images/sprites/qbert/qbert06.png");
+    iResizeImage(&help,750,700);
+    iResizeImage(&life,23,23);
+    iInitSprite(&snake,-1);
+    iInitSprite(&qbert_jump,-1);
+    iInitSprite(&qbert_spin,-1);
+    iInitSprite(&ball,-1);
+    iInitSprite(&qbert_inverse,-1);
+    iLoadFramesFromFolder(frames, "assets/images/sprites/snake");
+    iLoadFramesFromFolder(frames_1, "assets/images/sprites/qbert_jump");
+    iLoadFramesFromFolder(spin_frame, "assets/images/sprites/spin");
+    iLoadFramesFromFolder(ball_frame, "assets/images/sprites/ball");
+    iLoadFramesFromFolder(qbert_invert, "assets/images/sprites/qbert_invert");
+    iChangeSpriteFrames(&snake, frames, 2);
+    iChangeSpriteFrames(&qbert_jump, frames_1, 2);
+    iChangeSpriteFrames(&qbert_spin, spin_frame, 6);
+    iChangeSpriteFrames(&ball, ball_frame, 2);
+    iChangeSpriteFrames(&qbert_inverse, qbert_invert, 2);
+     iScaleSprite(&snake,2.0);
+     iScaleSprite(&qbert_inverse,2.0);
+     iScaleSprite(&ball,2.0);
+     iScaleSprite(&qbert_jump,2.0);
+     iSetSpritePosition(&snake, -50, 400);
+     iSetSpritePosition(&qbert_jump, -5, 400);
+     iSetSpritePosition(&qbert_spin, 400, 200);
+     iSetSpritePosition(&qbert_inverse,801,195);
+     iSetSpritePosition(&ball,850,200);
+}
+
 
 #define PI 3.14159265
 #define MAX_SIZE 10
@@ -13,7 +51,13 @@
 typedef enum {
     STATE_MENU,
     STATE_GAME,
-    STATE_EDITOR
+    STATE_EDITOR,
+    STATE_RESUME,
+    STATE_SETTING,
+    STATE_HELP,
+    STATE_HIGHSCORE,
+    STATE_CREDITS,
+    STATE_EXIT
 } app_t;
 
 typedef enum {
@@ -74,6 +118,9 @@ typedef struct {
 
 typedef struct {
     body_t km;
+    int lives;
+    int max_lives;
+    bool ko;
 } player_t;
 
 typedef struct {
@@ -101,11 +148,15 @@ player_t player;
 enemy_t enemies[NUM_ENEMIES];
 
 int width=800,height=800;
+int sound_1 = -1,sound_2=-1;
+
 
 double start_x=width/2;
 double start_y=height*0.9;
 double a = 30;
-
+bool sound1=true,sound2=false;
+bool selected_yes=true;
+bool selected_no=false;
 double blocksPos3d[][3]={
     {7,7,0},{6,7,1},{5,7,2},{4,7,3},{3,7,4},{2,7,5},{1,7,6},{0,7,7},
     {6,6,0},{5,6,1},{4,6,2},{3,6,3},{2,6,4},{1,6,5},{0,6,6},
@@ -144,6 +195,37 @@ void iClearQueue() {
     drawqueue[i].flags=0;
 }
 
+void iAnim()
+{
+    if (app_state==STATE_MENU){
+        qbert_jump.x+=20;
+        snake.x+=20;
+        qbert_inverse.x-=20;
+        ball.x-=20;
+      
+        if (snake.x>800){
+            snake.x=-50;
+        }
+        if (qbert_jump.x>800){
+            qbert_jump.x=-5;
+        }
+        if (qbert_inverse.x<0){
+            qbert_inverse.x=801;
+        }
+        if (ball.x<0){
+            ball.x=850;
+        }
+    }
+	iAnimateSprite(&snake);
+    iAnimateSprite(&qbert_jump);
+    iAnimateSprite(&qbert_inverse);
+    iAnimateSprite(&ball);
+}
+
+void iAnimSetting(){
+    iAnimateSprite(&qbert_spin);
+}
+
 void iTile(double x, double y) {
     double x_coords[]={x,x+a*cos(PI/6),x,x-a*cos(PI/6)};
     double y_coords[]={y,y-a/2,y-a,y-a/2};
@@ -179,10 +261,17 @@ void iDrawEnemy(enemy_t* enemy) {
         case ENEMY_COILY: iSetColor(coily.r,coily.g,coily.b);break;
         case ENEMY_UGG: iSetColor(ugg.r,ugg.g,ugg.b);break;
         case ENEMY_SAM: iSetColor(sam.r,sam.g,sam.b);break;
-        default: iSetColor(200,210,100);break;
+        default: iSetColor(255,0,0);break;
     }
     // printf("%d %d %d\n",(int)enemy->km.pos.x,(int)enemy->km.pos.y,(int)enemy->km.pos.z);
+    iSetColor(255,0,0);
     iFilledCircle(start_x+(enemy->km.pos.z-enemy->km.pos.x)*a*cos(PI/6),start_y-(enemy->km.pos.z+enemy->km.pos.x)*a/2-enemy->km.pos.y*a-a/2,a/5);
+}
+
+bool collision(player_t* player,enemy_t* enemy){
+    if ((player->km.pos.x==enemy->km.pos.x) && (player->km.pos.y==enemy->km.pos.y) && (player->km.pos.z==enemy->km.pos.z) )
+    return true;
+    else return false;
 }
 
 void iDrawQueue() {
@@ -232,9 +321,9 @@ void iDrawQueue() {
             }
             case TYPE_PLAYER: {
                 iSetTransparentColor(0,0,0,0.5);
-                iFilledEllipse(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/4,a/8);
+                iShowLoadedImage(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,&life);
                 iSetColor(240,10,10);
-                iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
+                //iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
                 break;
             }
             case TYPE_ENEMY: {
@@ -257,13 +346,102 @@ void iGrid() {
 }
 
 void iMenu() {
-    iSetColor(255,255,255);
-    iTextAdvanced(start_x-200,start_y-100,"Q*Bert",1, 2);
-    iSetColor(86, 169, 152);
-    iFilledRectangle(width/2-100,height/2-20,200,40);
-    iSetColor(0,0,0);
-    iText(width/2-20,height/2-5,"Start");
+    app_state=STATE_MENU;
+    iSetColor(32, 56, 94);
+    iFilledRectangle(0,0,800,800);
+    iShowLoadedImage(88,580,&bg);
+    iSetColor(255, 255, 51);
+    iFilledRectangle(width/2-100,500,150,30);
+    iFilledRectangle(width/2-100,435,150,30);
+    iFilledRectangle(width/2-100,370,150,30);
+    iFilledRectangle(width/2-100,305,150,30);
+    iFilledRectangle(width/2-100,240,150,30);
+    iFilledRectangle(width/2-100,175,150,30);
+    iFilledRectangle(width/2-100,110,150,30);
+    iSetColor(255,51,51);
+    iTextBold(width/2-42,510,"Start");
+    iTextBold(width/2-47,445,"Resume");
+    iTextBold(width/2-50,380,"Setting");
+    iTextBold(width/2-42,315,"Help");
+    iTextBold(width/2-60,250,"High Score");
+    iTextBold(width/2-50,185,"Credits");
+    iTextBold(width/2-42,120,"Exit");
+    
+    
 }
+
+void iResume();
+void iSetting(){
+     app_state=STATE_SETTING;
+     iSetColor(32, 56, 94);
+     iFilledRectangle(0,0,800,800);
+     iSetColor(255, 255, 51);
+     iFilledRectangle(225,600,450,100);
+     if (selected_yes){
+        iSetColor(185, 176, 46);
+     iFilledRectangle(300,500,100,45);}
+     else {
+        iSetColor(255, 255, 51);
+         iFilledRectangle(300,500,100,45);
+     }
+     if (selected_no){
+        iSetColor(185, 176, 46);
+        iFilledRectangle(300,400,100,45);
+     }
+     else{
+        iSetColor(255, 255, 51);
+        iFilledRectangle(300,400,100,45);
+     }
+     iSetColor(255, 255, 51);
+     iFilledRectangle(300,100,250,45);
+     iFilledRectangle(100,300,110,45);
+     if (sound1){
+        iSetColor(185, 176, 46);
+     iFilledRectangle(300,300,150,45);
+    }
+     else {
+        iSetColor(255, 255, 51);
+        iFilledRectangle(300,300,150,45);
+     }
+     if (sound2){
+        iSetColor(185, 176, 46);
+        iFilledRectangle(500,300,150,45);
+     }
+     else {
+          iSetColor(255, 255, 51);
+          iFilledRectangle(500,300,150,45);
+     }
+     
+     iSetColor(255,51,51);
+     iTextAdvanced(260,630,"Show Co-Ordinates?",0.3,2);
+     
+     iTextAdvanced(325,515,"YES",0.2,1);
+     iTextAdvanced(325,415,"NO",0.2,1);
+     iTextAdvanced(107,310,"SOUND:",0.2,1);
+     iTextAdvanced(309,310,"SOUND 1",0.2,1);
+     iTextAdvanced(509,310,"SOUND 2",0.2,1);
+     iTextAdvanced(320,110,"BACK TO MENU",0.2,2);
+}
+void iHelp(){
+     app_state=STATE_HELP;
+    iSetColor(32, 56, 94);
+    iFilledRectangle(0,0,800,800);
+     iShowLoadedImage(40,100,&help);
+     iSetColor(255, 255, 51);
+     iFilledCircle(21,700,15);
+     iFilledCircle(100,475,15);
+     iFilledCircle(200,220,15);
+    iFilledRectangle(350,50,100,45);
+     iSetColor(255,51,51);
+     iTextAdvanced(375,60,"EXIT",0.2,2);
+     iFilledCircle(21,700,8);
+     iFilledCircle(100,475,8);
+     iFilledCircle(200,220,8);
+
+    
+}
+void iHighscore();
+void iCredits();
 
 void iBlock() {
     for(int i = 0; i < n;i++) {
@@ -273,11 +451,27 @@ void iBlock() {
     }
 }
 
-void iPlayer() {
+void iPlayer(player_t * player1) {
     player.km.pos.x=0;
     player.km.pos.y=0;
     player.km.pos.z=1;
     player.km.jump.active=0;
+    player1 -> lives =3;
+    player1 -> max_lives=3;
+    player1 -> ko=true;
+
+}
+
+void iLoseLife(player_t * player){
+    if (player ->lives >0)
+    player->lives--;
+   if (player-> lives ==0)
+    exit(0);
+    else {
+        player -> km.pos.x=4;
+        player -> km.pos.y=5;
+        player -> km.pos.z=1;
+    }
 }
 
 int iBodyMove(int x, int y, int z, body_t *km) {
@@ -348,7 +542,7 @@ void iEnemy() {
 void iGame() {
     app_state=STATE_GAME;
     iBlock();
-    iPlayer();
+    iPlayer(&player);
     iEnemy();
     iSetTimer(1000, iEnemyStep);
     // drawqueue[i].pos.x=player.pos.x,drawqueue[i].pos.y=player.pos.y,drawqueue[i].pos.z=player.pos.z;
@@ -417,12 +611,38 @@ void iDraw() {
 
     if (app_state==STATE_MENU) {
         iMenu();
-    } else if (app_state==STATE_GAME) {
+        iShowSprite(&snake);
+        iShowSprite(&qbert_jump);
+        iShowSprite(&qbert_inverse);
+        iShowSprite(&ball);
+    } 
+    else if (app_state==STATE_SETTING){
+        iSetting();
+        iShowSprite(&qbert_spin);
+    }
+    else if (app_state==STATE_HELP){
+        iHelp();
+    }
+    else if (app_state==STATE_GAME) {
         iSetColor(255,255,255);
         char pos[50];
         snprintf(pos, 50, "%d, %d, %d",(int)player.km.pos.x, (int)player.km.pos.y, (int)player.km.pos.z);
-        iText(10, 10, pos,GLUT_BITMAP_TIMES_ROMAN_24);
-        // iGame();
+       if (selected_yes){
+        iText(10,30 , pos,GLUT_BITMAP_TIMES_ROMAN_24);
+       }
+       iSetColor(12,47,173);
+       iTextBold(10,750,"LIVES:");
+       for (int i=1;i<=player.lives;i++){
+        iShowLoadedImage(30+i*35,740,&life);
+       }
+       for (int i=0;i<NUM_ENEMIES;i++){
+       if (collision(&player,&enemies[i])){
+        iLoseLife(&player);
+        return;
+       }
+    }
+
+       // iGame();
         iDrawQueue();
     } else if (app_state==STATE_EDITOR) {
         iBlock();
@@ -461,9 +681,26 @@ void iMouse(int button, int state, int mx, int my) {
     // }
     if (app_state==STATE_MENU) {
         if (button==GLUT_LEFT_BUTTON && state==GLUT_DOWN) {
-            if (mx>width/2-100&&mx<width/2+100&&my>height/2-20&&my<height/2+20) {
-                // start menu clicked
+            if (mx>width/2-100&&mx<width/2+50&&my>500&&my<530) {
                 iGame();
+            }
+          /*  else if (mx>width/2-100&&mx<width/2+50&&my>435&&my<465) {
+                iResume();
+            }*/
+            else if (mx>width/2-100&&mx<width/2+50&&my>370&&my<400) {
+                iSetting();
+            }
+            else if (mx>width/2-100&&mx<width/2+50&&my>305&&my<335) {
+                iHelp();
+            } /*
+            else if (mx>width/2-100&&mx<width/2+50&&my>240&&my<270) {
+                iHighscore();
+            }
+            else if (mx>width/2-100&&mx<width/2+50&&my>175&&my<205) {
+                iCredits();
+            } */
+            else if (mx>width/2-100&&mx<width/2+50&&my>110&&my<140) {
+                exit(0);
             }
         }
 
@@ -471,6 +708,36 @@ void iMouse(int button, int state, int mx, int my) {
 
     } else if (app_state==STATE_GAME) {
         
+    }
+    else if (app_state==STATE_SETTING){
+        if (mx>300 && mx<400 && my>500 && my<545){
+            selected_yes=true;
+            selected_no=false;
+        }
+        else if (mx>300 && mx<400 && my>400 && my<445){
+            selected_yes=false;
+            selected_no=true;
+        }
+        else if (mx>300 && mx<550 && my>100 && my<145){
+            iMenu();
+        }
+        else if (mx>300 && mx<450 && my>300 && my<345){
+            sound1=true;
+            sound2=false;
+             iResumeSound(sound_1);
+             iPauseSound(sound_2);
+        }
+        else if (mx>500 && mx<650 && my>300 && my<345){
+            sound2=true;
+            sound1=false;
+             iResumeSound(sound_2);
+             iPauseSound(sound_1);
+        }
+    }
+    else if (app_state==STATE_HELP){
+        if (mx>350 && mx<450 && my>50 && my<95){
+            iMenu();
+        }
     }
 }
 
@@ -546,7 +813,14 @@ int main(int argc, char *argv[])
 {
     glutInit(&argc, argv);
     iSetTransparency(1);
+    loadresource();
     printf("%d\n",sizeof(blocksPos3d)/sizeof(blocksPos3d[0]));
+    iInitializeSound();
+    sound_1=iPlaySound("assets/sounds/undertale_1.wav",true,80);  
+    sound_2=iPlaySound("assets/sounds/undertale_2.wav",true,80);
+    iPauseSound(sound_2); 
+    iSetTimer(600, iAnim);
+    iSetTimer(200,iAnimSetting);
     iInitialize(width, height, "Q*Bert");
     return 0;
 }
