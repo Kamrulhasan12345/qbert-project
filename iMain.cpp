@@ -10,9 +10,6 @@
 Image bg,help,life,frames[2],frames_1[2],spin_frame[6],ball_frame[2],qbert_invert[2];
 Sprite snake,qbert_jump,qbert_spin,ball,qbert_inverse;
 
-
-
-
 #define PI 3.14159265
 #define MAX_SIZE 10
 #define ESC 0x1b
@@ -123,8 +120,8 @@ int sound_1 = -1,sound_2=-1;
 
 double start_x=width/2;
 double start_y=height*0.9;
-double tile_width = 30;
-double tile_height = 30;
+double tile_width = 40;
+double tile_height = 40;
 bool sound1=true,sound2=false;
 bool selected_yes=true;
 bool selected_no=false;
@@ -453,14 +450,14 @@ void iBlock() {
     }
 }
 
-void iPlayer(player_t * player1) {
+void iPlayer() {
     player.km.pos.x=0;
     player.km.pos.y=0;
     player.km.pos.z=1;
     player.km.jump.active=0;
-    player1 -> lives =3;
-    player1 -> max_lives=3;
-    player1 -> ko=true;
+    player.lives =3;
+    player.max_lives=3;
+    player.ko=true;
 
 }
 
@@ -548,7 +545,7 @@ void iEnemy() {
 void iGame() {
     app_state=STATE_GAME;
     iBlock();
-    iPlayer(&player);
+    iPlayer();
     iEnemy();
     iSetTimer(1000, iEnemyStep);
     // drawqueue[i].pos.x=player.pos.x,drawqueue[i].pos.y=player.pos.y,drawqueue[i].pos.z=player.pos.z;
