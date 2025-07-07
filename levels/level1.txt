@@ -1,0 +1,18 @@
+LEVEL 
+1
+START
+0 0 0
+WORLD
+x1 y1 z1
+x2 y2 z2
+.
+.
+.
+.
+xn yn zn
+ENEMY
+COILY x y z
+RED x y z
+STATE
+1 r g b
+2 r g b

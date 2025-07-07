@@ -102,6 +102,13 @@ typedef struct {
     void *ref;
 } drawqueue_t;
 
+typedef struct {
+    double *(blocks[3]);
+    color_t *states;
+    color_t l_color, r_color;
+    enemy_t *enemies;
+} level_t;
+
 app_t app_state = STATE_MENU;
 
 editor_t editor = {.wireframe=false,.grid=false,.debug=false};
@@ -186,6 +193,14 @@ void iLoadResource(){
     iSetSpritePosition(&qbert_spin, 400, 200);
     iSetSpritePosition(&qbert_inverse,801,195);
     iSetSpritePosition(&ball,850,200);
+}
+
+void iLoadLevel(int level) {
+  // load a selective level into global variables
+}
+
+void iCompleteLevel() {
+  // load splash screen and then load next level
 }
 
 void iClearQueue() {
@@ -819,7 +834,7 @@ int main(int argc, char *argv[])
     iLoadResource();
     printf("%d\n",sizeof(blocksPos3d)/sizeof(blocksPos3d[0]));
     iInitializeSound();
-    sound_1=iPlaySound("assets/sounds/undertale_1.wav",true,80);  
+    sound_1=iPlaySound("assets/sounds/undertale_1.wav",true,80);
     sound_2=iPlaySound("assets/sounds/undertale_2.wav",true,80);
     iPauseSound(sound_2); 
     iSetTimer(600, iAnim);
