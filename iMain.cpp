@@ -351,11 +351,11 @@ void iDrawQueue() {
 }
 
 void iGrid() {
-    double c = start_x/sqrt(3)+start_y+((int)((width-start_x)/sqrt(3)+height-start_y))*tile_width;
+    double c = start_x/sqrt(3)+start_y+((int)((width-start_x)/sqrt(3)+height-start_y))*tile_height;
     iSetTransparentColor(255,255,255,0.25);
     for(;c>=0;c-=tile_width)
         iLine(0,c,width,-width/sqrt(3)+c);
-    c=start_y-start_x/sqrt(3)+((int)(height-start_y+start_x/sqrt(3)))*tile_width;
+    c=start_y-start_x/sqrt(3)+((int)(height-start_y+start_x/sqrt(3)))*tile_height;
     for(;width/sqrt(3)+c>=0;c-=tile_width)
         iLine(0,c,width,width/sqrt(3)+c);
 }
@@ -524,6 +524,10 @@ int iBodyMove(int x, int y, int z, body_t *km) {
     // printf("time to go... yay!!!\n");
     // printf("%lf %lf %lf\n",km->pos.x,km->pos.y,km->pos.z);
     return 1;
+}
+
+void iGetNextStep() {
+  
 }
 
 void iEnemyStep() {
