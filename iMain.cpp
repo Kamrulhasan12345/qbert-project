@@ -7,7 +7,7 @@
 #include "iGraphics.h"
 #include "iSound.h"
 
-Image bg,help,life,frames[2],frames_1[2],spin_frame[6],ball_frame[2],qbert_invert[2];
+Image bg,help,life,frames[2],frames_1[2],spin_frame[6],ball_frame[2],qbert_invert[2],qbert,pause_button;
 Sprite snake,qbert_jump,qbert_spin,ball,qbert_inverse;
 
 #define PI 3.14159265
@@ -18,6 +18,7 @@ Sprite snake,qbert_jump,qbert_spin,ball,qbert_inverse;
 typedef enum {
     STATE_MENU,
     STATE_GAME,
+    STATE_GAME_MENU,
     STATE_EDITOR,
     STATE_RESUME,
     STATE_SETTING,
@@ -122,16 +123,17 @@ player_t player;
 enemy_t enemies[NUM_ENEMIES];
 
 int width=800,height=800;
-int sound_1 = -1,sound_2=-1;
+int sound_1 = -1,sound_2=-1,sound_3 = -1;
 
 
 double start_x=width/2;
 double start_y=height*0.9;
 double tile_width = 40;
 double tile_height = 40;
-bool sound1=true,sound2=false;
+bool sound1=true,sound2=false,sound3=false;
 bool selected_yes=true;
 bool selected_no=false;
+bool pause=false;
 double blocksPos3d[][3]={
     {7,7,0},{6,7,1},{5,7,2},{4,7,3},{3,7,4},{2,7,5},{1,7,6},{0,7,7},
     {6,6,0},{5,6,1},{4,6,2},{3,6,3},{2,6,4},{1,6,5},{0,6,6},
@@ -167,6 +169,9 @@ void iLoadResource(){
     iLoadImage(&bg,"assets/images/title.png");
     iLoadImage(&help,"assets/images/help.png");
     iLoadImage(&life,"assets/images/sprites/qbert/qbert06.png");
+    iLoadImage(&qbert,"assets/images/sprites/qbert/qbert06.png");
+    iLoadImage(&pause_button,"assets/images/pausebutton.png");
+    iResizeImage(&qbert,35,40);
     iResizeImage(&help,750,700);
     iResizeImage(&life,23,23);
     iInitSprite(&snake);
@@ -336,7 +341,7 @@ void iDrawQueue() {
             }
             case TYPE_PLAYER: {
                 iSetTransparentColor(0,0,0,0.5);
-                iShowLoadedImage(start_x+(z-x)*tile_width*cos(PI/6),start_y-(z+x)*tile_width/2-y*tile_height-tile_width/2,&life); 
+                iShowLoadedImage(start_x+(z-x)*tile_width*cos(PI/6),start_y-(z+x)*tile_width/2-y*tile_height-tile_width/2,&qbert); 
                 iSetColor(240,10,10);
                 //iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
                 break;
@@ -384,6 +389,16 @@ void iMenu() {
 }
 
 void iResume();
+
+void iPauseMenu(){
+    pause=true;
+    iSetTransparentColor(32, 56, 94,0.95);
+    iFilledRectangle(187,200,500,500);
+    iSetColor(235, 73, 52);
+    iFilledRectangle(187+160,500,160,30);
+
+
+}
 
 void iSetting(){
      app_state=STATE_SETTING;
@@ -531,6 +546,7 @@ void iGetNextStep() {
 }
 
 void iEnemyStep() {
+    if (pause) return;
     for(int i = 0; i < NUM_ENEMIES; i++) {
         switch(enemies[i].type) {
             case ENEMY_COILY: case ENEMY_SAM: case ENEMY_UGG: case ENEMY_WRONGWAY:
@@ -652,11 +668,15 @@ void iDraw() {
        if (selected_yes){
         iText(10,30 , pos,GLUT_BITMAP_TIMES_ROMAN_24);
        }
+       iSetColor(245, 149, 66);
+       iFilledRectangle(700,715,37,37);
+       iShowLoadedImage(703,716,&pause_button);
        iSetColor(12,47,173);
        iTextBold(10,750,"LIVES:");
        for (int i=1;i<=player.lives;i++){
         iShowLoadedImage(30+i*35,740,&life);
        }
+  
        for (int i=0;i<NUM_ENEMIES;i++){
        if (collision(&player,&enemies[i])){
         iLoseLife(&player);
@@ -666,7 +686,13 @@ void iDraw() {
 
        // iGame();
         iDrawQueue();
-    } else if (app_state==STATE_EDITOR) {
+             if (pause){
+        iPauseMenu();
+        return;
+    }
+    } 
+    
+    else if (app_state==STATE_EDITOR) {
         iBlock();
         iDrawQueue();
         if (editor.grid) iGrid();
@@ -729,7 +755,9 @@ void iMouse(int button, int state, int mx, int my) {
     } else if (app_state==STATE_EDITOR) {
 
     } else if (app_state==STATE_GAME) {
-        
+        if (mx>700 && mx<737 && my>715 && my<715+37){
+            iPauseMenu();
+        }
     }
     else if (app_state==STATE_SETTING){
         if (mx>300 && mx<400 && my>500 && my<545){
@@ -821,10 +849,18 @@ void iSpecialKeyboard(unsigned char key)
     } else if (app_state==STATE_GAME) {
         switch(key) {
             case GLUT_KEY_END: break;
-            case GLUT_KEY_LEFT: iBodyMove(player.km.pos.x, player.km.pos.y,player.km.pos.z-1,&player.km); break;
-            case GLUT_KEY_RIGHT: iBodyMove(player.km.pos.x, player.km.pos.y,player.km.pos.z+1,&player.km); break;
-            case GLUT_KEY_UP: iBodyMove(player.km.pos.x-1, player.km.pos.y,player.km.pos.z,&player.km); break;
-            case GLUT_KEY_DOWN: iBodyMove(player.km.pos.x+1, player.km.pos.y,player.km.pos.z,&player.km); break;
+            case GLUT_KEY_LEFT: iBodyMove(player.km.pos.x, player.km.pos.y,player.km.pos.z-1,&player.km); 
+                                sound_3=iPlaySound("assets/sounds/jump_sound.wav",false,40); 
+                                break;
+            case GLUT_KEY_RIGHT: iBodyMove(player.km.pos.x, player.km.pos.y,player.km.pos.z+1,&player.km); 
+                                 sound_3=iPlaySound("assets/sounds/jump_sound.wav",false,40);
+                                 break;
+            case GLUT_KEY_UP: iBodyMove(player.km.pos.x-1, player.km.pos.y,player.km.pos.z,&player.km); 
+                              sound_3=iPlaySound("assets/sounds/jump_sound.wav",false,40);
+                              break;
+            case GLUT_KEY_DOWN: iBodyMove(player.km.pos.x+1, player.km.pos.y,player.km.pos.z,&player.km);
+                                sound_3=iPlaySound("assets/sounds/jump_sound.wav",false,40); 
+                                break;
             default: break;
         }
     }
@@ -840,6 +876,8 @@ int main(int argc, char *argv[])
     iInitializeSound();
     sound_1=iPlaySound("assets/sounds/undertale_1.wav",true,80);
     sound_2=iPlaySound("assets/sounds/undertale_2.wav",true,80);
+    sound_3=iPlaySound("assets/sounds/jump_sound.wav",false,40);
+    iPauseSound(sound_3);
     iPauseSound(sound_2); 
     iSetTimer(600, iAnim);
     iSetTimer(200,iAnimSetting);
