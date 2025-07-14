@@ -134,6 +134,9 @@ bool sound1=true,sound2=false,sound3=false;
 bool selected_yes=true;
 bool selected_no=false;
 bool pause=false;
+bool hover_start=false,hover_resume=false,hover_setting=false,hover_help=false,hover_high=false;
+bool hover_credits=false,hover_exit=false;
+
 double blocksPos3d[][3]={
     {7,7,0},{6,7,1},{5,7,2},{4,7,3},{3,7,4},{2,7,5},{1,7,6},{0,7,7},
     {6,6,0},{5,6,1},{4,6,2},{3,6,3},{2,6,4},{1,6,5},{0,6,6},
@@ -372,22 +375,91 @@ void iMenu() {
     iSetColor(32, 56, 94);
     iFilledRectangle(0,0,800,800);
     iShowLoadedImage(88,580,&bg);
+    if (hover_start){
+        iSetColor(232, 163, 26);
+        iFilledRectangle(width/2-107,494,170,38);
+        iSetColor(101, 67, 33);
+        iTextBold(width/2-40,508,"Start");
+    }
+    else {
     iSetColor(255, 255, 51);
     iFilledRectangle(width/2-100,500,150,30);
-    iFilledRectangle(width/2-100,435,150,30);
-    iFilledRectangle(width/2-100,370,150,30);
-    iFilledRectangle(width/2-100,305,150,30);
-    iFilledRectangle(width/2-100,240,150,30);
-    iFilledRectangle(width/2-100,175,150,30);
-    iFilledRectangle(width/2-100,110,150,30);
     iSetColor(255,51,51);
     iTextBold(width/2-42,510,"Start");
-    iTextBold(width/2-47,445,"Resume");
-    iTextBold(width/2-50,380,"Setting");
-    iTextBold(width/2-42,315,"Help");
-    iTextBold(width/2-60,250,"High Score");
-    iTextBold(width/2-50,185,"Credits");
+    }
+    if (hover_resume){
+        iSetColor(232, 163, 26);
+        iFilledRectangle(width/2-107,435-6,170,38);
+        iSetColor(101, 67, 33);
+        iTextBold(width/2-47,445,"Resume");
+    }
+    else {
+         iSetColor(255, 255, 51);
+         iFilledRectangle(width/2-100,435,150,30);
+         iSetColor(255,51,51);
+         iTextBold(width/2-47,445,"Resume");
+    }
+    if (hover_setting){
+        iSetColor(232, 163, 26);
+        iFilledRectangle(width/2-107,370-6,170,38);
+        iSetColor(101, 67, 33);
+        iTextBold(width/2-50,380,"Setting");
+    }
+    else {
+        iSetColor(255, 255, 51);
+        iFilledRectangle(width/2-100,370,150,30);
+        iSetColor(255,51,51);
+        iTextBold(width/2-50,380,"Setting");
+    }
+    if (hover_help){
+        iSetColor(232, 163, 26);
+        iFilledRectangle(width/2-107,305-6,170,38);
+        iSetColor(101, 67, 33);
+        iTextBold(width/2-37,315,"Help");
+    }
+    else {
+        iSetColor(255, 255, 51);
+        iFilledRectangle(width/2-100,305,150,30);
+        iSetColor(255,51,51);
+        iTextBold(width/2-40,315,"Help");
+        
+    }
+    if (hover_high){
+        iSetColor(232, 163, 26);
+        iFilledRectangle(width/2-107,240-6,170,38);
+        iSetColor(101, 67, 33);
+        iTextBold(width/2-60,250,"High Score");
+    }
+    else {
+         iSetColor(255, 255, 51);
+         iFilledRectangle(width/2-100,240,150,30);
+         iSetColor(255,51,51);
+         iTextBold(width/2-60,250,"High Score");
+    }
+    if (hover_credits){
+        iSetColor(232, 163, 26);
+        iFilledRectangle(width/2-107,175-6,170,38);
+        iSetColor(101, 67, 33);
+        iTextBold(width/2-50,185,"Credits");
+    }
+    else{
+        iSetColor(255, 255, 51);
+        iFilledRectangle(width/2-100,175,150,30);
+        iSetColor(255,51,51);
+        iTextBold(width/2-50,185,"Credits");
+    }
+    if (hover_exit){
+        iSetColor(232, 163, 26);
+        iFilledRectangle(width/2-107,110-6,170,38);
+        iSetColor(101, 67, 33);
+        iTextBold(width/2-42,120,"Exit");
+    }
+    else{
+    iSetColor(255, 255, 51);
+    iFilledRectangle(width/2-100,110,150,30);
+    iSetColor(255,51,51);
     iTextBold(width/2-42,120,"Exit");
+    }
 }
 
 void iResume();
@@ -717,6 +789,32 @@ function iMouseMove() is called when the user moves the mouse.
 */
 void iMouseMove(int mx, int my) {
     // place your codes here
+    if (app_state==STATE_MENU){
+         if (mx>width/2-100&&mx<width/2+50&&my>500&&my<530) {
+                hover_start=true;
+            }
+           else if (mx>width/2-100&&mx<width/2+50&&my>435&&my<465) {
+                hover_resume=true;
+            }
+            else if (mx>width/2-100&&mx<width/2+50&&my>370&&my<400) {  
+                hover_setting=true;
+            }
+            else if (mx>width/2-100&&mx<width/2+50&&my>305&&my<335) {
+                hover_help=true;
+            } 
+            else if (mx>width/2-100&&mx<width/2+50&&my>240&&my<270) {
+                hover_high=true;
+            }
+            else if (mx>width/2-100&&mx<width/2+50&&my>175&&my<205) {
+                hover_credits=true;
+            }
+            else if (mx>width/2-100&&mx<width/2+50&&my>110&&my<140) {
+                hover_exit=true;
+            }
+            else {
+                hover_start=false;hover_resume=false;hover_setting=false;hover_help=false;hover_high=false;hover_credits=false;hover_exit=false;
+            }
+    }
 }
 
 /*
@@ -768,6 +866,7 @@ void iMouse(int button, int state, int mx, int my) {
     } else if (app_state==STATE_EDITOR) {
 
     } else if (app_state==STATE_GAME) {
+         if (button==GLUT_LEFT_BUTTON && state==GLUT_DOWN){
         if (mx>700 && mx<737 && my>715 && my<715+37){
             iPauseMenu();
         }
@@ -782,6 +881,7 @@ void iMouse(int button, int state, int mx, int my) {
         }
         else if (pause && mx>352 && mx<352+145 && my>440-120 && my<440-120+35){
             app_state=STATE_MENU;
+            pause=false;
         }  
         else if (pause && mx>352 && mx<352+154 && my>440-60 && my<440-60+35){
             bool soundOn = (sound1 || sound2);
@@ -800,9 +900,10 @@ void iMouse(int button, int state, int mx, int my) {
             iPauseSound(sound_2);
             }
         }
-      
+    }
     }
    else if (app_state==STATE_SETTING){
+     if (button==GLUT_LEFT_BUTTON && state==GLUT_DOWN){
     if (mx>300 && mx<400 && my>500 && my<545){
         selected_yes=true;
         selected_no=false;
@@ -826,6 +927,7 @@ void iMouse(int button, int state, int mx, int my) {
         iResumeSound(sound_2);
         iPauseSound(sound_1);
     }
+}
 }
     else if (app_state==STATE_HELP){
         if (mx>350 && mx<450 && my>50 && my<95){
