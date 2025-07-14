@@ -1,0 +1,23 @@
+CompileFlags:
+  Add: 
+    - -I.
+    - -IOpenGL/include
+    - -IOpenGL/include/SDL2
+    - -Wall
+    - -fexceptions
+    - -g
+    - -pthread
+    - -lGL
+    - -lGLU
+    - -lglut
+    - -lSDL2
+    - -lSDL2main
+    - -lSDL2_mixer
+
+Diagnostics:
+  Suppress: ["-Wunused-parameter"]
+
+HeaderInsertion:
+  IncludeBlocks: Preserve
+  InsertHeaders: Never
+
