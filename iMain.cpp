@@ -7,7 +7,7 @@
 #include "iGraphics.h"
 #include "iSound.h"
 
-Image bg,help,life,frames[2],frames_1[2],spin_frame[6],ball_frame[2],qbert_invert[2],qbert,pause_button;
+Image bg,help,life,frames[2],frames_1[2],spin_frame[6],ball_frame[2],qbert_invert[2],qbert,pause_button,pause_text;
 Sprite snake,qbert_jump,qbert_spin,ball,qbert_inverse;
 
 #define PI 3.14159265
@@ -171,9 +171,11 @@ void iLoadResource(){
     iLoadImage(&life,"assets/images/sprites/qbert/qbert06.png");
     iLoadImage(&qbert,"assets/images/sprites/qbert/qbert06.png");
     iLoadImage(&pause_button,"assets/images/pausebutton.png");
+    iLoadImage(&pause_text,"assets/images/paused.png");
     iResizeImage(&qbert,35,40);
     iResizeImage(&help,750,700);
     iResizeImage(&life,23,23);
+    iScaleImage(&pause_text,1.6);
     iInitSprite(&snake);
     iInitSprite(&qbert_jump);
     iInitSprite(&qbert_spin);
@@ -395,8 +397,19 @@ void iPauseMenu(){
     iSetTransparentColor(32, 56, 94,0.95);
     iFilledRectangle(187,200,500,500);
     iSetColor(235, 73, 52);
-    iFilledRectangle(187+160,500,160,30);
-
+    iFilledRectangle(352,500,154,35);
+    iFilledRectangle(352,440,154,35);
+    iFilledRectangle(352,440-60,154,35);
+    iFilledRectangle(352,440-120,154,35);
+    iSetColor(252,252,3);
+    iTextAdvanced(347+30,508,"Resume",0.2,2.0);
+    iTextAdvanced(347+37,448,"Restart",0.2,2.0);
+    if (sound1 || sound2)
+    iTextAdvanced(347+10,440-52,"Sound: ON",0.2,2.0);
+    else if (!sound1 && !sound2)
+    iTextAdvanced(347+10,440-52,"Sound: OFF",0.2,2.0);
+    iTextAdvanced(347+55,440-120+8,"Exit",0.2,2.0);
+    iShowLoadedImage(300,578,&pause_text);
 
 }
 
@@ -758,32 +771,62 @@ void iMouse(int button, int state, int mx, int my) {
         if (mx>700 && mx<737 && my>715 && my<715+37){
             iPauseMenu();
         }
-    }
-    else if (app_state==STATE_SETTING){
-        if (mx>300 && mx<400 && my>500 && my<545){
-            selected_yes=true;
-            selected_no=false;
+        if (pause && mx>352 && mx<352+145 && my>500 && my<500+35){
+            pause=false;
+        } 
+        else if(pause && mx>352 && mx<352+145 && my>440 && my<440+35){
+                player.km.pos.x=0;
+                player.km.pos.y=0;
+                player.km.pos.z=0; 
+                pause=false;
         }
-        else if (mx>300 && mx<400 && my>400 && my<445){
-            selected_yes=false;
-            selected_no=true;
-        }
-        else if (mx>300 && mx<550 && my>100 && my<145){
-            iMenu();
-        }
-        else if (mx>300 && mx<450 && my>300 && my<345){
+        else if (pause && mx>352 && mx<352+145 && my>440-120 && my<440-120+35){
+            app_state=STATE_MENU;
+        }  
+        else if (pause && mx>352 && mx<352+154 && my>440-60 && my<440-60+35){
+            bool soundOn = (sound1 || sound2);
+
+            if (soundOn){
+            sound1=false;
+            sound2=false;
+            iPauseSound(sound_1);
+            iPauseSound(sound_2);
+            }
+            else 
+            {
             sound1=true;
             sound2=false;
-             iResumeSound(sound_1);
-             iPauseSound(sound_2);
+            iResumeSound(sound_1);
+            iPauseSound(sound_2);
+            }
         }
-        else if (mx>500 && mx<650 && my>300 && my<345){
-            sound2=true;
-            sound1=false;
-             iResumeSound(sound_2);
-             iPauseSound(sound_1);
-        }
+      
     }
+   else if (app_state==STATE_SETTING){
+    if (mx>300 && mx<400 && my>500 && my<545){
+        selected_yes=true;
+        selected_no=false;
+    }
+    else if (mx>300 && mx<400 && my>400 && my<445){
+        selected_yes=false;
+        selected_no=true;
+    }
+    else if (mx>300 && mx<550 && my>100 && my<145){
+        iMenu();
+    }
+    else if (mx>300 && mx<450 && my>300 && my<345){
+        sound1=true;
+        sound2=false;
+        iResumeSound(sound_1);
+        iPauseSound(sound_2);
+    }
+    else if (mx>500 && mx<650 && my>300 && my<345){
+        sound2=true;
+        sound1=false;
+        iResumeSound(sound_2);
+        iPauseSound(sound_1);
+    }
+}
     else if (app_state==STATE_HELP){
         if (mx>350 && mx<450 && my>50 && my<95){
             iMenu();
