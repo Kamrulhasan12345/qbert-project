@@ -8,7 +8,7 @@
 #include "iSound.h"
 
 Image bg, help, life, frames[2], frames_1[2], spin_frame[6], ball_frame[2],
-    qbert_invert[2];
+    qbert_invert[2], qbert, pause_button, pause_text;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 
 #define PI 3.14159265
@@ -20,6 +20,7 @@ typedef enum
 {
   STATE_MENU,
   STATE_GAME,
+  STATE_GAME_MENU,
   STATE_EDITOR,
   STATE_RESUME,
   STATE_SETTING,
@@ -137,15 +138,21 @@ player_t player;
 enemy_t enemies[NUM_ENEMIES];
 
 int width = 800, height = 800;
-int sound_1 = -1, sound_2 = -1;
+int sound_1 = -1, sound_2 = -1, sound_3 = -1;
 
 double start_x = width / 2.0;
 double start_y = height * 0.9;
 double tile_width = 40;
 double tile_height = 40;
-bool sound1 = true, sound2 = false;
+
+bool sound1 = true, sound2 = false, sound3 = false;
 bool selected_yes = true;
 bool selected_no = false;
+bool pause = false;
+bool hover_start = false, hover_resume = false, hover_setting = false,
+     hover_help = false, hover_high = false;
+bool hover_credits = false, hover_exit = false;
+
 double blocksPos3d[][3] = { { 7, 7, 0 },
                             { 6, 7, 1 },
                             { 5, 7, 2 },
@@ -213,8 +220,13 @@ iLoadResource ()
   iLoadImage (&bg, "assets/images/title.png");
   iLoadImage (&help, "assets/images/help.png");
   iLoadImage (&life, "assets/images/sprites/qbert/qbert06.png");
+  iLoadImage (&qbert, "assets/images/sprites/qbert/qbert06.png");
+  iLoadImage (&pause_button, "assets/images/pausebutton.png");
+  iLoadImage (&pause_text, "assets/images/paused.png");
+  iResizeImage (&qbert, 35, 40);
   iResizeImage (&help, 750, 700);
   iResizeImage (&life, 23, 23);
+  iScaleImage (&pause_text, 1.6);
   iInitSprite (&snake);
   iInitSprite (&qbert_jump);
   iInitSprite (&qbert_spin);
@@ -466,7 +478,7 @@ iDrawQueue ()
             iShowLoadedImage (start_x + (z - x) * tile_width * cos (PI / 6),
                               start_y - (z + x) * tile_width / 2
                                   - y * tile_height - tile_width / 2,
-                              &life);
+                              &qbert);
             iSetColor (240, 10, 10);
             // iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
             break;
@@ -504,25 +516,129 @@ iMenu ()
   iSetColor (32, 56, 94);
   iFilledRectangle (0, 0, 800, 800);
   iShowLoadedImage (88, 580, &bg);
-  iSetColor (255, 255, 51);
-  iFilledRectangle (width / 2 - 100, 500, 150, 30);
-  iFilledRectangle (width / 2 - 100, 435, 150, 30);
-  iFilledRectangle (width / 2 - 100, 370, 150, 30);
-  iFilledRectangle (width / 2 - 100, 305, 150, 30);
-  iFilledRectangle (width / 2 - 100, 240, 150, 30);
-  iFilledRectangle (width / 2 - 100, 175, 150, 30);
-  iFilledRectangle (width / 2 - 100, 110, 150, 30);
-  iSetColor (255, 51, 51);
-  iTextBold (width / 2 - 42, 510, "Start");
-  iTextBold (width / 2 - 47, 445, "Resume");
-  iTextBold (width / 2 - 50, 380, "Setting");
-  iTextBold (width / 2 - 42, 315, "Help");
-  iTextBold (width / 2 - 60, 250, "High Score");
-  iTextBold (width / 2 - 50, 185, "Credits");
-  iTextBold (width / 2 - 42, 120, "Exit");
+  if (hover_start)
+    {
+      iSetColor (232, 163, 26);
+      iFilledRectangle (width / 2 - 107, 494, 170, 38);
+      iSetColor (101, 67, 33);
+      iTextBold (width / 2 - 40, 508, "Start");
+    }
+  else
+    {
+      iSetColor (255, 255, 51);
+      iFilledRectangle (width / 2 - 100, 500, 150, 30);
+      iSetColor (255, 51, 51);
+      iTextBold (width / 2 - 42, 510, "Start");
+    }
+  if (hover_resume)
+    {
+      iSetColor (232, 163, 26);
+      iFilledRectangle (width / 2 - 107, 435 - 6, 170, 38);
+      iSetColor (101, 67, 33);
+      iTextBold (width / 2 - 47, 445, "Resume");
+    }
+  else
+    {
+      iSetColor (255, 255, 51);
+      iFilledRectangle (width / 2 - 100, 435, 150, 30);
+      iSetColor (255, 51, 51);
+      iTextBold (width / 2 - 47, 445, "Resume");
+    }
+  if (hover_setting)
+    {
+      iSetColor (232, 163, 26);
+      iFilledRectangle (width / 2 - 107, 370 - 6, 170, 38);
+      iSetColor (101, 67, 33);
+      iTextBold (width / 2 - 50, 380, "Setting");
+    }
+  else
+    {
+      iSetColor (255, 255, 51);
+      iFilledRectangle (width / 2 - 100, 370, 150, 30);
+      iSetColor (255, 51, 51);
+      iTextBold (width / 2 - 50, 380, "Setting");
+    }
+  if (hover_help)
+    {
+      iSetColor (232, 163, 26);
+      iFilledRectangle (width / 2 - 107, 305 - 6, 170, 38);
+      iSetColor (101, 67, 33);
+      iTextBold (width / 2 - 37, 315, "Help");
+    }
+  else
+    {
+      iSetColor (255, 255, 51);
+      iFilledRectangle (width / 2 - 100, 305, 150, 30);
+      iSetColor (255, 51, 51);
+      iTextBold (width / 2 - 40, 315, "Help");
+    }
+  if (hover_high)
+    {
+      iSetColor (232, 163, 26);
+      iFilledRectangle (width / 2 - 107, 240 - 6, 170, 38);
+      iSetColor (101, 67, 33);
+      iTextBold (width / 2 - 60, 250, "High Score");
+    }
+  else
+    {
+      iSetColor (255, 255, 51);
+      iFilledRectangle (width / 2 - 100, 240, 150, 30);
+      iSetColor (255, 51, 51);
+      iTextBold (width / 2 - 60, 250, "High Score");
+    }
+  if (hover_credits)
+    {
+      iSetColor (232, 163, 26);
+      iFilledRectangle (width / 2 - 107, 175 - 6, 170, 38);
+      iSetColor (101, 67, 33);
+      iTextBold (width / 2 - 50, 185, "Credits");
+    }
+  else
+    {
+      iSetColor (255, 255, 51);
+      iFilledRectangle (width / 2 - 100, 175, 150, 30);
+      iSetColor (255, 51, 51);
+      iTextBold (width / 2 - 50, 185, "Credits");
+    }
+  if (hover_exit)
+    {
+      iSetColor (232, 163, 26);
+      iFilledRectangle (width / 2 - 107, 110 - 6, 170, 38);
+      iSetColor (101, 67, 33);
+      iTextBold (width / 2 - 42, 120, "Exit");
+    }
+  else
+    {
+      iSetColor (255, 255, 51);
+      iFilledRectangle (width / 2 - 100, 110, 150, 30);
+      iSetColor (255, 51, 51);
+      iTextBold (width / 2 - 42, 120, "Exit");
+    }
 }
 
 void iResume ();
+
+void
+iPauseMenu ()
+{
+  pause = true;
+  iSetTransparentColor (32, 56, 94, 0.95);
+  iFilledRectangle (187, 200, 500, 500);
+  iSetColor (235, 73, 52);
+  iFilledRectangle (352, 500, 154, 35);
+  iFilledRectangle (352, 440, 154, 35);
+  iFilledRectangle (352, 440 - 60, 154, 35);
+  iFilledRectangle (352, 440 - 120, 154, 35);
+  iSetColor (252, 252, 3);
+  iTextAdvanced (347 + 30, 508, "Resume", 0.2, 2.0);
+  iTextAdvanced (347 + 37, 448, "Restart", 0.2, 2.0);
+  if (sound1 || sound2)
+    iTextAdvanced (347 + 10, 440 - 52, "Sound: ON", 0.2, 2.0);
+  else if (!sound1 && !sound2)
+    iTextAdvanced (347 + 10, 440 - 52, "Sound: OFF", 0.2, 2.0);
+  iTextAdvanced (347 + 55, 440 - 120 + 8, "Exit", 0.2, 2.0);
+  iShowLoadedImage (300, 578, &pause_text);
+}
 
 void
 iSetting ()
@@ -784,23 +900,17 @@ iEnemyStep ()
                 switch (d)
                   {
                   case 0:
-                    s = iBodyMove (enemies[i].km.pos.x, enemies[i].km.pos.y,
-                                   enemies[i].km.pos.z - 1, &enemies[i].km);
-                    break;
-                  case 1:
-                    s = iBodyMove (enemies[i].km.pos.x, enemies[i].km.pos.y,
-                                   enemies[i].km.pos.z + 1, &enemies[i].km);
-                    break;
-                  case 2:
-                    s = iBodyMove (enemies[i].km.pos.x - 1,
-                                   enemies[i].km.pos.y, enemies[i].km.pos.z,
-                                   &enemies[i].km);
-                    break;
-                  case 3:
-                    s = iBodyMove (enemies[i].km.pos.x + 1,
-                                   enemies[i].km.pos.y, enemies[i].km.pos.z,
-                                   &enemies[i].km);
-                    break;
+                    s = iBodyMove (enemies[i].km.pos.x,
+              enemies[i].km.pos.y, enemies[i].km.pos.z - 1,
+              &enemies[i].km); break; case 1: s = iBodyMove
+              (enemies[i].km.pos.x, enemies[i].km.pos.y,
+                                   enemies[i].km.pos.z + 1,
+              &enemies[i].km); break; case 2: s = iBodyMove
+              (enemies[i].km.pos.x - 1, enemies[i].km.pos.y,
+              enemies[i].km.pos.z, &enemies[i].km); break; case
+              3: s = iBodyMove (enemies[i].km.pos.x + 1,
+                                   enemies[i].km.pos.y,
+              enemies[i].km.pos.z, &enemies[i].km); break;
                   default:
                     break;
                   }
@@ -843,7 +953,8 @@ iGame ()
 }
 
 // /*
-// function iGenTiles() is the function that generates tiles for the blocks
+// function iGenTiles() is the function that generates tiles for
+// the blocks
 // */
 // void iGenTiles()
 // {
@@ -855,7 +966,8 @@ iGame ()
 //             for(int j=0;j<=i;j++) {
 //                 iDTile(tiles[i][j].x,tiles[i][j].y);
 //                 cx+=(j==i?0:2*a*cos(PI/6));
-//                 if (j<i) tiles[i][j+1].x=cx,tiles[i][j+1].y=cy;
+//                 if (j<i)
+//                 tiles[i][j+1].x=cx,tiles[i][j+1].y=cy;
 //             }
 //         } else {
 //             cx+=a*cos(PI/6),cy-=(a*cos(PI/3)+a);
@@ -863,18 +975,21 @@ iGame ()
 //             for(int j=i;j>=0;j--) {
 //                 iDTile(tiles[i][j].x,tiles[i][j].y);
 //                 cx-=(j==0?0:2*a*cos(PI/6));
-//                 if (j>0) tiles[i][j-1].x=cx,tiles[i][j-1].y=cy;
+//                 if (j>0)
+//                 tiles[i][j-1].x=cx,tiles[i][j-1].y=cy;
 //             }
 //         }
 //     }
 // }
 
 // /*
-// function iGenSides() is the function that generates the sides of the blocks
+// function iGenSides() is the function that generates the sides
+// of the blocks
 // */
 // void iGenSides()
 // {
-//     double current_x=start_x-a*cos(PI/6),current_y=start_y+a/2;
+//     double
+//     current_x=start_x-a*cos(PI/6),current_y=start_y+a/2;
 //     for(int i = 0; i < 7;i++) {
 //         if (i&1) {
 //             current_x-=a*cos(PI/6),current_y-=3*a/2;
@@ -928,12 +1043,16 @@ iDraw ()
         {
           iText (10, 30, pos, GLUT_BITMAP_TIMES_ROMAN_24);
         }
+      iSetColor (245, 149, 66);
+      iFilledRectangle (700, 715, 37, 37);
+      iShowLoadedImage (703, 716, &pause_button);
       iSetColor (12, 47, 173);
       iTextBold (10, 750, "LIVES:");
       for (int i = 1; i <= player.lives; i++)
         {
           iShowLoadedImage (30 + i * 35, 740, &life);
         }
+
       for (int i = 0; i < NUM_ENEMIES; i++)
         {
           if (collision (&player, &enemies[i]))
@@ -945,7 +1064,13 @@ iDraw ()
 
       // iGame();
       iDrawQueue ();
+      if (pause)
+        {
+          iPauseMenu ();
+          return;
+        }
     }
+
   else if (app_state == STATE_EDITOR)
     {
       iBlock ();
@@ -955,18 +1080,66 @@ iDraw ()
     }
 }
 /*
-function iMouseMove() is called when the user moves the mouse.
-(mx, my) is the position where the mouse pointer is.
+function iMouseMove() is called when the user moves the
+mouse. (mx, my) is the position where the mouse pointer is.
 */
 void
 iMouseMove (int mx, int my)
 {
   // place your codes here
+  if (app_state == STATE_MENU)
+    {
+      if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 500 && my < 530)
+        {
+          hover_start = true;
+        }
+      else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 435
+               && my < 465)
+        {
+          hover_resume = true;
+        }
+      else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 370
+               && my < 400)
+        {
+          hover_setting = true;
+        }
+      else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 305
+               && my < 335)
+        {
+          hover_help = true;
+        }
+      else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 240
+               && my < 270)
+        {
+          hover_high = true;
+        }
+      else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 175
+               && my < 205)
+        {
+          hover_credits = true;
+        }
+      else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 110
+               && my < 140)
+        {
+          hover_exit = true;
+        }
+      else
+        {
+          hover_start = false;
+          hover_resume = false;
+          hover_setting = false;
+          hover_help = false;
+          hover_high = false;
+          hover_credits = false;
+          hover_exit = false;
+        }
+    }
 }
 
 /*
-function iMouseDrag() is called when the user presses and drags the mouse.
-(mx, my) is the position where the mouse pointer is.
+function iMouseDrag() is called when the user presses and
+drags the mouse. (mx, my) is the position where the mouse
+pointer is.
 */
 void
 iMouseDrag (int mx, int my)
@@ -975,17 +1148,20 @@ iMouseDrag (int mx, int my)
 }
 
 /*
-function iMouse() is called when the user presses/releases the mouse.
-(mx, my) is the position where the mouse pointer is.
+function iMouse() is called when the user
+presses/releases the mouse. (mx, my) is the position
+where the mouse pointer is.
 */
 void
 iMouse (int button, int state, int mx, int my)
 {
-  // if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
+  // if (button == GLUT_LEFT_BUTTON && state ==
+  // GLUT_DOWN)
   // {
   //     // pl
   // }
-  // if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
+  // if (button == GLUT_RIGHT_BUTTON && state ==
+  // GLUT_DOWN)
   // {
   //     // place your codes here
   // }
@@ -998,8 +1174,9 @@ iMouse (int button, int state, int mx, int my)
             {
               iGame ();
             }
-          /*  else if (mx>width/2-100&&mx<width/2+50&&my>435&&my<465) {
-                iResume();
+          /*  else if
+            (mx>width/2-100&&mx<width/2+50&&my>435&&my<465)
+            { iResume();
             }*/
           else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 370
                    && my < 400)
@@ -1011,11 +1188,13 @@ iMouse (int button, int state, int mx, int my)
             {
               iHelp ();
             } /*
-            else if (mx>width/2-100&&mx<width/2+50&&my>240&&my<270) {
-                iHighscore();
+            else if
+            (mx>width/2-100&&mx<width/2+50&&my>240&&my<270)
+            { iHighscore();
             }
-            else if (mx>width/2-100&&mx<width/2+50&&my>175&&my<205) {
-                iCredits();
+            else if
+            (mx>width/2-100&&mx<width/2+50&&my>175&&my<205)
+            { iCredits();
             } */
           else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 110
                    && my < 140)
@@ -1029,36 +1208,84 @@ iMouse (int button, int state, int mx, int my)
     }
   else if (app_state == STATE_GAME)
     {
+      if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
+        {
+          if (mx > 700 && mx < 737 && my > 715 && my < 715 + 37)
+            {
+              iPauseMenu ();
+            }
+          if (pause && mx > 352 && mx < 352 + 145 && my > 500 && my < 500 + 35)
+            {
+              pause = false;
+            }
+          else if (pause && mx > 352 && mx < 352 + 145 && my > 440
+                   && my < 440 + 35)
+            {
+              player.km.pos.x = 0;
+              player.km.pos.y = 0;
+              player.km.pos.z = 0;
+              pause = false;
+            }
+          else if (pause && mx > 352 && mx < 352 + 145 && my > 440 - 120
+                   && my < 440 - 120 + 35)
+            {
+              app_state = STATE_MENU;
+              pause = false;
+            }
+          else if (pause && mx > 352 && mx < 352 + 154 && my > 440 - 60
+                   && my < 440 - 60 + 35)
+            {
+              bool soundOn = (sound1 || sound2);
+
+              if (soundOn)
+                {
+                  sound1 = false;
+                  sound2 = false;
+                  iPauseSound (sound_1);
+                  iPauseSound (sound_2);
+                }
+              else
+                {
+                  sound1 = true;
+                  sound2 = false;
+                  iResumeSound (sound_1);
+                  iPauseSound (sound_2);
+                }
+            }
+        }
     }
   else if (app_state == STATE_SETTING)
     {
-      if (mx > 300 && mx < 400 && my > 500 && my < 545)
+      if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
         {
-          selected_yes = true;
-          selected_no = false;
-        }
-      else if (mx > 300 && mx < 400 && my > 400 && my < 445)
-        {
-          selected_yes = false;
-          selected_no = true;
-        }
-      else if (mx > 300 && mx < 550 && my > 100 && my < 145)
-        {
-          iMenu ();
-        }
-      else if (mx > 300 && mx < 450 && my > 300 && my < 345)
-        {
-          sound1 = true;
-          sound2 = false;
-          iResumeSound (sound_1);
-          iPauseSound (sound_2);
-        }
-      else if (mx > 500 && mx < 650 && my > 300 && my < 345)
-        {
-          sound2 = true;
-          sound1 = false;
-          iResumeSound (sound_2);
-          iPauseSound (sound_1);
+          if (mx > 300 && mx < 400 && my > 500 && my < 545)
+            {
+              selected_yes = true;
+              selected_no = false;
+            }
+          else if (mx > 300 && mx < 400 && my > 400 && my < 445)
+            {
+              selected_yes = false;
+              selected_no = true;
+            }
+          else if (mx > 300 && mx < 550 && my > 100 && my < 145)
+            {
+              iMenu ();
+            }
+          else if (mx > 300 && mx < 450 && my > 300 && my < 345)
+            {
+              sound1 = true;
+              sound2 = false;
+              iResumeSound (sound_1);
+              iPauseSound (sound_2);
+            }
+          else if (mx > 500 && mx < 650 && my > 300 && my < 345)
+            {
+              sound2 = true;
+              sound1 = false;
+              iResumeSound (sound_2);
+              iPauseSound (sound_1);
+            }
         }
     }
   else if (app_state == STATE_HELP)
@@ -1071,8 +1298,8 @@ iMouse (int button, int state, int mx, int my)
 }
 
 /*
-function iMouseWheel() is called when the user scrolls the mouse wheel.
-dir = 1 for up, -1 for down.
+function iMouseWheel() is called when the user scrolls
+the mouse wheel. dir = 1 for up, -1 for down.
 */
 void
 iMouseWheel (int dir, int mx, int my)
@@ -1081,8 +1308,9 @@ iMouseWheel (int dir, int mx, int my)
 }
 
 /*
-function iKeyboard() is called whenever the user hits a key in keyboard.
-key- holds the ASCII value of the key pressed.
+function iKeyboard() is called whenever the user hits a
+key in keyboard. key- holds the ASCII value of the key
+pressed.
 */
 void
 iKeyboard (unsigned char key)
@@ -1139,14 +1367,16 @@ iKeyboard (unsigned char key)
 }
 
 /*
-function iSpecialKeyboard() is called whenver user hits special keys
-likefunction keys, home, end, pg up, pg down, arraows etc. you have to use
-appropriate constants to detect them. A list is:
-GLUT_KEY_F1, GLUT_KEY_F2, GLUT_KEY_F3, GLUT_KEY_F4, GLUT_KEY_F5, GLUT_KEY_F6,
-GLUT_KEY_F7, GLUT_KEY_F8, GLUT_KEY_F9, GLUT_KEY_F10, GLUT_KEY_F11,
-GLUT_KEY_F12, GLUT_KEY_LEFT, GLUT_KEY_UP, GLUT_KEY_RIGHT, GLUT_KEY_DOWN,
-GLUT_KEY_PAGE_UP, GLUT_KEY_PAGE_DOWN, GLUT_KEY_HOME, GLUT_KEY_END,
-GLUT_KEY_INSERT */
+function iSpecialKeyboard() is called whenver user hits
+special keys likefunction keys, home, end, pg up, pg
+down, arraows etc. you have to use appropriate
+constants to detect them. A list is: GLUT_KEY_F1,
+GLUT_KEY_F2, GLUT_KEY_F3, GLUT_KEY_F4, GLUT_KEY_F5,
+GLUT_KEY_F6, GLUT_KEY_F7, GLUT_KEY_F8, GLUT_KEY_F9,
+GLUT_KEY_F10, GLUT_KEY_F11, GLUT_KEY_F12,
+GLUT_KEY_LEFT, GLUT_KEY_UP, GLUT_KEY_RIGHT,
+GLUT_KEY_DOWN, GLUT_KEY_PAGE_UP, GLUT_KEY_PAGE_DOWN,
+GLUT_KEY_HOME, GLUT_KEY_END, GLUT_KEY_INSERT */
 void
 iSpecialKeyboard (unsigned char key)
 {
@@ -1165,18 +1395,22 @@ iSpecialKeyboard (unsigned char key)
         case GLUT_KEY_LEFT:
           iBodyMove (player.km.pos.x, player.km.pos.y, player.km.pos.z - 1,
                      &player.km);
+          sound_3 = iPlaySound ("assets/sounds/jump_sound.wav", false, 40);
           break;
         case GLUT_KEY_RIGHT:
           iBodyMove (player.km.pos.x, player.km.pos.y, player.km.pos.z + 1,
                      &player.km);
+          sound_3 = iPlaySound ("assets/sounds/jump_sound.wav", false, 40);
           break;
         case GLUT_KEY_UP:
           iBodyMove (player.km.pos.x - 1, player.km.pos.y, player.km.pos.z,
                      &player.km);
+          sound_3 = iPlaySound ("assets/sounds/jump_sound.wav", false, 40);
           break;
         case GLUT_KEY_DOWN:
           iBodyMove (player.km.pos.x + 1, player.km.pos.y, player.km.pos.z,
                      &player.km);
+          sound_3 = iPlaySound ("assets/sounds/jump_sound.wav", false, 40);
           break;
         default:
           break;
@@ -1194,6 +1428,8 @@ main (int argc, char *argv[])
   iInitializeSound ();
   sound_1 = iPlaySound ("assets/sounds/undertale_1.wav", true, 80);
   sound_2 = iPlaySound ("assets/sounds/undertale_2.wav", true, 80);
+  sound_3 = iPlaySound ("assets/sounds/jump_sound.wav", false, 40);
+  iPauseSound (sound_3);
   iPauseSound (sound_2);
   iSetTimer (600, iAnim);
   iSetTimer (200, iAnimSetting);
