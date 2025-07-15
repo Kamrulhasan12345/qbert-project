@@ -701,9 +701,9 @@ void iBlock()
 
 void iPlayer()
 {
-  player.km.pos.x = 0;
-  player.km.pos.y = 0;
-  player.km.pos.z = 1;
+  player.km.pos.x = 3;
+  player.km.pos.y = 7;
+  player.km.pos.z = 4;
   player.km.jump.active = 0;
   player.lives = 3;
   player.max_lives = 3;
@@ -797,10 +797,7 @@ position_t
 iGetNextStep(position_t s, position_t e)
 {
   int i = 0, j = i;
-  position_t queue[MAX_SIZE * MAX_SIZE * MAX_SIZE];
-  for (int j = 0; j < MAX_SIZE * MAX_SIZE * MAX_SIZE; j++)
-    queue[j] = {.x = -1, .y = -1, .z = -1};
-  queue[j++] = {.x = s.x, .y = s.y, .z = s.z};
+
   bool visited[MAX_SIZE][MAX_SIZE][MAX_SIZE] = {{{0}}};
   visited[(int)s.y][(int)s.x][(int)s.z] = 1;
   position_t prev[MAX_SIZE][MAX_SIZE][MAX_SIZE];
@@ -808,17 +805,27 @@ iGetNextStep(position_t s, position_t e)
     for (int k = 0; k < MAX_SIZE; k++)
       for (int l = 0; l < MAX_SIZE; l++)
         prev[j][k][l] = {.x = -1, .y = -1, .z = -1};
+  position_t queue[MAX_SIZE * MAX_SIZE * MAX_SIZE];
+  for (int j = 0; j < MAX_SIZE * MAX_SIZE * MAX_SIZE; j++)
+    queue[j] = {.x = -1, .y = -1, .z = -1};
+  j = i;
+  queue[j++] = {.x = s.x, .y = s.y, .z = s.z};
+  printf("full tracer: \n");
   while (~(int)queue[i].x)
   {
-    for (int j = 0; j < 4; j++)
+    printf("%d queue: %g, %g, %g\n", i, queue[i].x, queue[i].y, queue[i].z);
+    for (int k = 0; k < 4; k++)
     {
-      position_t n = iPositionFinder(dirs[j], queue[i]);
+      position_t n = iPositionFinder(dirs[k], queue[i]);
       if (~(int)n.x && !visited[(int)n.y][(int)n.x][(int)n.z])
       {
+        printf("%d %d: %g %g %g\n", i, j + 1, n.x, n.y, n.z);
         queue[j++] = {.x = n.x, .y = n.y, .z = n.z};
+        printf("%d queue: %g, %g, %g\n", j - 1, queue[j - 1].x, queue[j - 1].y, queue[i].z);
         visited[(int)n.y][(int)n.x][(int)n.z] = 1;
         prev[(int)n.y][(int)n.x][(int)n.z] = {.x = queue[i].x, .y = queue[i].y, .z = queue[i].z};
       }
+      printf("\n");
     }
     i++;
   }
@@ -907,7 +914,7 @@ void iGame()
   iPlayer();
   iEnemy();
   if (!enemy_step_timer)
-    enemy_step_timer = iSetTimer(5000, iEnemyStep);
+    enemy_step_timer = iSetTimer(500, iEnemyStep);
   else
     iResumeTimer(enemy_step_timer);
   // drawqueue[i].pos.x=player.pos.x,drawqueue[i].pos.y=player.pos.y,drawqueue[i].pos.z=player.pos.z;
