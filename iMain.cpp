@@ -177,12 +177,12 @@ color_t coily = {.r = 10, .g = 100, .b = 240};
 color_t ugg = {.r = 100, .g = 200, .b = 150};
 color_t sam = {.r = 10, .g = 255, .b = 200};
 
-color_t states[3] = {{.r = 86, .g = 70, .b = 239}, {.r = 222, .g = 222, .b = 0}};
+color_t states[3] = {{.r = 86, .g = 70, .b = 239}, {.r = 222, .g = 222, .b = 0}, {.r = 20, .g = 200, .b = 239}};
 color_t l_color = {.r = 86, .g = 169, .b = 152}, r_color = {.r = 49, .g = 70, .b = 70};
 
 position_t dirs[4] = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}};
 
-int state_num = 2;
+int state_num = 3;
 
 int n = sizeof(blocksPos3d) / sizeof(blocksPos3d[0]);
 
@@ -614,6 +614,12 @@ void iPlayer() {
   player.score = 0;
   player.max_lives = 3;
   player.ko = true;
+  if(pause){
+    
+  player.km.pos.x = 0;
+  player.km.pos.y = 0;
+  player.km.pos.z = 0;
+  }
 }
 
 void iLoseLife(player_t *player) {
@@ -782,7 +788,18 @@ void iEnemy() {
   for (int i = 0; i < NUM_ENEMIES; i++) {
     enemies[i].type = ENEMY_COILY;
     enemies[i].km.pos.x = 0, enemies[i].km.pos.y = 0, enemies[i].km.pos.z = 0;
+    if (pause){
+      enemies[i].km.pos.x = 3, enemies[i].km.pos.y = 7, enemies[i].km.pos.z = 4;
+    }
   }
+}
+
+void iRestart() {
+  app_state = STATE_GAME;
+  iBlock();
+  iPlayer();
+  iEnemy();
+  pause=false;
 }
 
 void iGame() {
@@ -791,7 +808,7 @@ void iGame() {
   iPlayer();
   iEnemy();
   if (!enemy_step_timer)
-    enemy_step_timer = iSetTimer(500, iEnemyStep);
+    enemy_step_timer = iSetTimer(1000, iEnemyStep);
   else
     iResumeTimer(enemy_step_timer);
   // drawqueue[i].pos.x=player.pos.x,drawqueue[i].pos.y=player.pos.y,drawqueue[i].pos.z=player.pos.z;
@@ -1008,10 +1025,7 @@ void iMouse(int button, int state, int mx, int my) {
       if (pause && mx > 352 && mx < 352 + 145 && my > 500 && my < 500 + 35) {
         pause = false;
       } else if (pause && mx > 352 && mx < 352 + 145 && my > 440 && my < 440 + 35) {
-        player.km.pos.x = 0;
-        player.km.pos.y = 0;
-        player.km.pos.z = 0;
-        pause = false;
+iRestart();    
       } else if (pause && mx > 352 && mx < 352 + 145 && my > 440 - 120 && my < 440 - 120 + 35) {
         app_state = STATE_MENU;
         pause = false;
