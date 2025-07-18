@@ -14,7 +14,7 @@ Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 #define PI 3.14159265
 #define MAX_SIZE 10
 #define ESC 0x1b
-#define NUM_ENEMIES 1
+#define NUM_ENEMIES 2
 
 typedef enum {
   STATE_MENU,
@@ -92,24 +92,27 @@ typedef struct {
 
 typedef struct {
   double *(blocks[3]);
+  int blocks_count;
+  double *(visible[3]);
+  int visible_count;
   int8_t level_num, state_num;
   color_t states[3];
   color_t l_color, r_color;
   enemy_t *enemies;
-} level_t;
+} world_t;
 
 app_t app_state = STATE_MENU;
 
 editor_t editor = {.wireframe = false, .grid = false, .debug = false};
 
-// take this to level_t
+// take this to world_t
 tile_t tiles[MAX_SIZE][MAX_SIZE][MAX_SIZE];
 
 drawqueue_t drawqueue[MAX_SIZE * MAX_SIZE * MAX_SIZE + 1 + NUM_ENEMIES + 1];
 
 player_t player;
 
-// level_t
+// world_t
 enemy_t enemies[NUM_ENEMIES];
 
 int enemy_step_timer;
@@ -173,11 +176,16 @@ double blocksPos3d[][3] = {{7, 7, 0},
                            {4, 5, 2},
                            {3, 7, 5}};
 
+double visible[100][3];
+
+int visible_count;
+
 color_t coily = {.r = 10, .g = 100, .b = 240};
 color_t ugg = {.r = 100, .g = 200, .b = 150};
 color_t sam = {.r = 10, .g = 255, .b = 200};
 
-color_t states[3] = {{.r = 86, .g = 70, .b = 239}, {.r = 222, .g = 222, .b = 0}, {.r = 20, .g = 200, .b = 239}};
+color_t states[3] = {
+    {.r = 86, .g = 70, .b = 239}, {.r = 222, .g = 222, .b = 0}, {.r = 20, .g = 200, .b = 239}};
 color_t l_color = {.r = 86, .g = 169, .b = 152}, r_color = {.r = 49, .g = 70, .b = 70};
 
 position_t dirs[4] = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}};
@@ -603,22 +611,41 @@ void iBlock() {
     tiles[y][x][z].valid = true;
     tiles[y][x][z].state = 0;
   }
+  int i, j = 0;
+  for (int y = MAX_SIZE - 1; ~y; --y) {
+    for (int x = MAX_SIZE - 1; ~x; --x) {
+      for (int z = MAX_SIZE - 1; ~z; --z) {
+        if (!tiles[y][x][z].valid)
+          continue;
+        if (y > 0) {
+          for (i = y - 1; ~i; --i)
+            if (tiles[i][x][z].valid)
+              break;
+          if (~i)
+            continue;
+        }
+        visible[j][0] = 1. * x, visible[j][1] = 1. * y, visible[j++][2] = 1. * z;
+      }
+    }
+  }
+  visible_count = j;
 }
 
 void iPlayer() {
-  player.km.pos.x = 3;
-  player.km.pos.y = 7;
-  player.km.pos.z = 4;
+  int idx = rand() % visible_count;
+  player.km.pos.x = visible[idx][0];
+  player.km.pos.y = visible[idx][1];
+  player.km.pos.z = visible[idx][2];
   player.km.jump.active = 0;
   player.lives = 3;
   player.score = 0;
   player.max_lives = 3;
   player.ko = true;
-  if(pause){
-    
-  player.km.pos.x = 0;
-  player.km.pos.y = 0;
-  player.km.pos.z = 0;
+  if (pause) {
+
+    player.km.pos.x = 0;
+    player.km.pos.y = 0;
+    player.km.pos.z = 0;
   }
 }
 
@@ -787,8 +814,10 @@ void iEnemyStep() {
 void iEnemy() {
   for (int i = 0; i < NUM_ENEMIES; i++) {
     enemies[i].type = ENEMY_COILY;
-    enemies[i].km.pos.x = 0, enemies[i].km.pos.y = 0, enemies[i].km.pos.z = 0;
-    if (pause){
+    int idx = rand() % visible_count;
+    enemies[i].km.pos.x = visible[idx][0], enemies[i].km.pos.y = visible[idx][1],
+    enemies[i].km.pos.z = visible[idx][2];
+    if (pause) {
       enemies[i].km.pos.x = 3, enemies[i].km.pos.y = 7, enemies[i].km.pos.z = 4;
     }
   }
@@ -799,7 +828,7 @@ void iRestart() {
   iBlock();
   iPlayer();
   iEnemy();
-  pause=false;
+  pause = false;
 }
 
 void iGame() {
@@ -1025,7 +1054,7 @@ void iMouse(int button, int state, int mx, int my) {
       if (pause && mx > 352 && mx < 352 + 145 && my > 500 && my < 500 + 35) {
         pause = false;
       } else if (pause && mx > 352 && mx < 352 + 145 && my > 440 && my < 440 + 35) {
-iRestart();    
+        iRestart();
       } else if (pause && mx > 352 && mx < 352 + 145 && my > 440 - 120 && my < 440 - 120 + 35) {
         app_state = STATE_MENU;
         pause = false;
@@ -1168,6 +1197,9 @@ void iSpecialKeyboard(unsigned char key) {
         key == GLUT_KEY_DOWN) {
       // handle scores
       position_t target = iPositionFinder(dirs[dir], player.km.pos);
+      if (target.x <= -1)
+        return;
+      player.km.la = (look_t)dir;
       iBodyMove(target, &player.km);
       if (tiles[(int)target.y][(int)target.x][(int)target.z].state < state_num - 1) {
         tiles[(int)target.y][(int)target.x][(int)target.z].state++;
