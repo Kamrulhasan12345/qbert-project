@@ -8,7 +8,7 @@
 #include "iSound.h"
 
 Image bg, help, life, frames[2], frames_1[2], spin_frame[6], ball_frame[2], qbert_invert[2], qbert,
-    pause_button, pause_text;
+    pause_button, pause_text,dialogue,gameover;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 
 #define PI 3.14159265
@@ -131,7 +131,7 @@ bool selected_no = false;
 bool pause = false;
 bool hover_start = false, hover_resume = false, hover_setting = false, hover_help = false,
      hover_high = false;
-bool hover_credits = false, hover_exit = false;
+bool hover_credits = false, hover_exit = false,endgame=false;
 
 double blocksPos3d[][3] = {{7, 7, 0},
                            {6, 7, 1},
@@ -209,10 +209,14 @@ void iLoadResource() {
   iLoadImage(&qbert, "assets/images/sprites/qbert/qbert06.png");
   iLoadImage(&pause_button, "assets/images/pausebutton.png");
   iLoadImage(&pause_text, "assets/images/paused.png");
+  iLoadImage(&dialogue, "assets/images/dialogue.png");
+  iLoadImage(&gameover, "assets/images/gameover.png");
   iResizeImage(&qbert, 35, 40);
   iResizeImage(&help, 750, 700);
   iResizeImage(&life, 23, 23);
   iScaleImage(&pause_text, 1.6);
+  iScaleImage(&dialogue,1.5);
+  iScaleImage(&gameover, 0.7);
   iInitSprite(&snake);
   iInitSprite(&qbert_jump);
   iInitSprite(&qbert_spin);
@@ -538,6 +542,23 @@ void iPauseMenu() {
   iShowLoadedImage(300, 578, &pause_text);
 }
 
+void iGameOver(){
+  endgame=true;
+  iDrawQueue();
+    iSetTransparentColor(32, 56, 94, 0.95);
+  iFilledRectangle(187, 200, 500, 500);
+  iShowLoadedImage(300,578,&qbert);
+  iShowLoadedImage(287,613,&dialogue);
+  iShowLoadedImage(315,400,&gameover);
+  iSetColor(247, 233, 30);
+  iTextBold(287,440,"Your Score:");
+      char score[50];
+    snprintf(score, 50, "%d", player.score);
+    iTextBold(380, 440, score);
+    
+}
+
+
 void iSetting() {
   app_state = STATE_SETTING;
   iSetColor(32, 56, 94);
@@ -654,8 +675,7 @@ void iLoseLife(player_t *player) {
     player->lives--;
   if (player->lives == 0) {
     iPauseTimer(enemy_step_timer);
-    iMenu();
-    // we will add game over screen here
+    iGameOver();
   } else {
     int ind = rand() % n;
     player->km.pos.x = blocksPos3d[ind][0];
@@ -768,6 +788,7 @@ position_t iGetNextStep(position_t s, position_t e) {
 }
 
 void iEnemyStep() {
+  if (pause) return;
   for (int i = 0; i < NUM_ENEMIES; i++) {
     switch (enemies[i].type) {
     case ENEMY_COILY:
@@ -919,6 +940,7 @@ void iDraw() {
   } else if (app_state == STATE_HELP) {
     iHelp();
   } else if (app_state == STATE_GAME) {
+    if (!endgame){
     iSetColor(255, 255, 255);
     char pos[50];
     snprintf(pos, 50, "%d, %d, %d", (int)player.km.pos.x, (int)player.km.pos.y,
@@ -938,6 +960,7 @@ void iDraw() {
     char score[50];
     snprintf(score, 50, "%d", player.score);
     iTextBold(70, 700, score);
+  }
 
     for (int i = 0; i < NUM_ENEMIES; i++) {
       if (collision(&player, &enemies[i])) {
@@ -1196,6 +1219,7 @@ void iSpecialKeyboard(unsigned char key) {
     if (key == GLUT_KEY_LEFT || key == GLUT_KEY_RIGHT || key == GLUT_KEY_UP ||
         key == GLUT_KEY_DOWN) {
       // handle scores
+      if (endgame) return;
       position_t target = iPositionFinder(dirs[dir], player.km.pos);
       if (target.x <= -1)
         return;
