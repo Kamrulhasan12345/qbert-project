@@ -8,7 +8,7 @@
 #include "iSound.h"
 
 Image bg, help, life, frames[2], frames_1[2], spin_frame[6], ball_frame[2], qbert_invert[2], qbert,
-    pause_button, pause_text,dialogue,gameover;
+    pause_button, pause_text, dialogue, gameover;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 
 #define PI 3.14159265
@@ -131,7 +131,7 @@ bool selected_no = false;
 bool pause = false;
 bool hover_start = false, hover_resume = false, hover_setting = false, hover_help = false,
      hover_high = false;
-bool hover_credits = false, hover_exit = false,endgame=false;
+bool hover_credits = false, hover_exit = false, endgame = false;
 
 double blocksPos3d[][3] = {{7, 7, 0},
                            {6, 7, 1},
@@ -215,7 +215,7 @@ void iLoadResource() {
   iResizeImage(&help, 750, 700);
   iResizeImage(&life, 23, 23);
   iScaleImage(&pause_text, 1.6);
-  iScaleImage(&dialogue,1.5);
+  iScaleImage(&dialogue, 1.5);
   iScaleImage(&gameover, 0.7);
   iInitSprite(&snake);
   iInitSprite(&qbert_jump);
@@ -542,22 +542,20 @@ void iPauseMenu() {
   iShowLoadedImage(300, 578, &pause_text);
 }
 
-void iGameOver(){
-  endgame=true;
+void iGameOver() {
+  endgame = true;
   iDrawQueue();
-    iSetTransparentColor(32, 56, 94, 0.95);
+  iSetTransparentColor(32, 56, 94, 0.95);
   iFilledRectangle(187, 200, 500, 500);
-  iShowLoadedImage(300,578,&qbert);
-  iShowLoadedImage(287,613,&dialogue);
-  iShowLoadedImage(315,400,&gameover);
+  iShowLoadedImage(300, 578, &qbert);
+  iShowLoadedImage(287, 613, &dialogue);
+  iShowLoadedImage(315, 400, &gameover);
   iSetColor(247, 233, 30);
-  iTextBold(287,440,"Your Score:");
-      char score[50];
-    snprintf(score, 50, "%d", player.score);
-    iTextBold(380, 440, score);
-    
+  iTextBold(287, 440, "Your Score:");
+  char score[50];
+  snprintf(score, 50, "%d", player.score);
+  iTextBold(380, 440, score);
 }
-
 
 void iSetting() {
   app_state = STATE_SETTING;
@@ -788,7 +786,8 @@ position_t iGetNextStep(position_t s, position_t e) {
 }
 
 void iEnemyStep() {
-  if (pause) return;
+  if (pause)
+    return;
   for (int i = 0; i < NUM_ENEMIES; i++) {
     switch (enemies[i].type) {
     case ENEMY_COILY:
@@ -861,6 +860,7 @@ void iGame() {
     enemy_step_timer = iSetTimer(1000, iEnemyStep);
   else
     iResumeTimer(enemy_step_timer);
+  // now going to set a timer that will check if I have completed the level
   // drawqueue[i].pos.x=player.pos.x,drawqueue[i].pos.y=player.pos.y,drawqueue[i].pos.z=player.pos.z;
   // drawqueue[i].flags=0;
   // drawqueue[i].type=TYPE_PLAYER;
@@ -940,27 +940,27 @@ void iDraw() {
   } else if (app_state == STATE_HELP) {
     iHelp();
   } else if (app_state == STATE_GAME) {
-    if (!endgame){
-    iSetColor(255, 255, 255);
-    char pos[50];
-    snprintf(pos, 50, "%d, %d, %d", (int)player.km.pos.x, (int)player.km.pos.y,
-             (int)player.km.pos.z);
-    if (selected_yes) {
-      iText(10, 30, pos, GLUT_BITMAP_TIMES_ROMAN_24);
+    if (!endgame) {
+      iSetColor(255, 255, 255);
+      char pos[50];
+      snprintf(pos, 50, "%d, %d, %d", (int)player.km.pos.x, (int)player.km.pos.y,
+               (int)player.km.pos.z);
+      if (selected_yes) {
+        iText(10, 30, pos, GLUT_BITMAP_TIMES_ROMAN_24);
+      }
+      iSetColor(245, 149, 66);
+      iFilledRectangle(700, 715, 37, 37);
+      iShowLoadedImage(703, 716, &pause_button);
+      iSetColor(12, 47, 173);
+      iTextBold(10, 750, "LIVES:");
+      for (int i = 1; i <= player.lives; i++) {
+        iShowLoadedImage(30 + i * 35, 740, &life);
+      }
+      iTextBold(10, 700, "SCORE:");
+      char score[50];
+      snprintf(score, 50, "%d", player.score);
+      iTextBold(70, 700, score);
     }
-    iSetColor(245, 149, 66);
-    iFilledRectangle(700, 715, 37, 37);
-    iShowLoadedImage(703, 716, &pause_button);
-    iSetColor(12, 47, 173);
-    iTextBold(10, 750, "LIVES:");
-    for (int i = 1; i <= player.lives; i++) {
-      iShowLoadedImage(30 + i * 35, 740, &life);
-    }
-    iTextBold(10, 700, "SCORE:");
-    char score[50];
-    snprintf(score, 50, "%d", player.score);
-    iTextBold(70, 700, score);
-  }
 
     for (int i = 0; i < NUM_ENEMIES; i++) {
       if (collision(&player, &enemies[i])) {
@@ -1219,7 +1219,8 @@ void iSpecialKeyboard(unsigned char key) {
     if (key == GLUT_KEY_LEFT || key == GLUT_KEY_RIGHT || key == GLUT_KEY_UP ||
         key == GLUT_KEY_DOWN) {
       // handle scores
-      if (endgame) return;
+      if (endgame)
+        return;
       position_t target = iPositionFinder(dirs[dir], player.km.pos);
       if (target.x <= -1)
         return;
