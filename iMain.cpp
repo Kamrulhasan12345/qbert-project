@@ -8,7 +8,7 @@
 #include "iSound.h"
 
 Image bg, help, life, frames[2], frames_1[2], spin_frame[6], ball_frame[2], qbert_invert[2], qbert,
-    pause_button, pause_text,dialogue,gameover;
+    pause_button, pause_text,dialogue,gameover,qbert_up,qbert_down,qbert_right;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 
 #define PI 3.14159265
@@ -49,7 +49,7 @@ typedef struct {
   int state;
 } tile_t;
 
-typedef enum { LOOK_LEFT, LOOK_RIGHT, LOOK_UP, LOOK_DOWN } look_t;
+//typedef enum { LOOK_LEFT, LOOK_RIGHT, LOOK_UP, LOOK_DOWN } look_t;
 
 typedef enum { ENEMY_COILY, ENEMY_UGG, ENEMY_WRONGWAY, ENEMY_SAM } enemytype_t;
 
@@ -66,7 +66,7 @@ typedef struct {
 
 typedef struct {
   position_t pos;
-  look_t la;
+  int la;
   jumper_t jump;
 } body_t;
 
@@ -207,11 +207,17 @@ void iLoadResource() {
   iLoadImage(&help, "assets/images/help.png");
   iLoadImage(&life, "assets/images/sprites/qbert/qbert06.png");
   iLoadImage(&qbert, "assets/images/sprites/qbert/qbert06.png");
+  iLoadImage(&qbert_up, "assets/images/sprites/qbert/qbert02.png");
+  iLoadImage(&qbert_down, "assets/images/sprites/qbert/qbert08.png");
+  iLoadImage(&qbert_right, "assets/images/sprites/qbert/qbert04.png");
   iLoadImage(&pause_button, "assets/images/pausebutton.png");
   iLoadImage(&pause_text, "assets/images/paused.png");
   iLoadImage(&dialogue, "assets/images/dialogue.png");
   iLoadImage(&gameover, "assets/images/gameover.png");
   iResizeImage(&qbert, 35, 40);
+  iResizeImage(&qbert_up, 35, 40);
+  iResizeImage(&qbert_down, 35, 40);
+  iResizeImage(&qbert_right, 35, 40);
   iResizeImage(&help, 750, 700);
   iResizeImage(&life, 23, 23);
   iScaleImage(&pause_text, 1.6);
@@ -408,9 +414,28 @@ void iDrawQueue() {
     }
     case TYPE_PLAYER: {
       iSetTransparentColor(0, 0, 0, 0.5);
+      if (player.km.la==1){
       iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
                        start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
-                       &qbert);
+                       &qbert);}
+      else if (player.km.la==0){
+
+      iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
+                       start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
+                       &qbert_right);
+      } 
+      else if (player.km.la==2){
+
+      iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
+                       start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
+                       &qbert_up);
+      } 
+      else if (player.km.la==3){
+
+      iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
+                       start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
+                       &qbert_down);
+      }               
       iSetColor(240, 10, 10);
       // iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
       break;
@@ -1223,7 +1248,7 @@ void iSpecialKeyboard(unsigned char key) {
       position_t target = iPositionFinder(dirs[dir], player.km.pos);
       if (target.x <= -1)
         return;
-      player.km.la = (look_t)dir;
+      player.km.la = dir;
       iBodyMove(target, &player.km);
       if (tiles[(int)target.y][(int)target.x][(int)target.z].state < state_num - 1) {
         tiles[(int)target.y][(int)target.x][(int)target.z].state++;
