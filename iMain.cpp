@@ -8,7 +8,7 @@
 #include "iSound.h"
 
 Image bg, help, life, frames[2], frames_1[2], spin_frame[6], ball_frame[2], qbert_invert[2], qbert,
-    pause_button, pause_text,dialogue,gameover,qbert_up,qbert_down,qbert_right;
+    pause_button, pause_text, dialogue, gameover, qbert_up, qbert_down, qbert_right;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 
 #define PI 3.14159265
@@ -49,7 +49,7 @@ typedef struct {
   int state;
 } tile_t;
 
-//typedef enum { LOOK_LEFT, LOOK_RIGHT, LOOK_UP, LOOK_DOWN } look_t;
+// typedef enum { LOOK_LEFT, LOOK_RIGHT, LOOK_UP, LOOK_DOWN } look_t;
 
 typedef enum { ENEMY_COILY, ENEMY_UGG, ENEMY_WRONGWAY, ENEMY_SAM } enemytype_t;
 
@@ -414,28 +414,26 @@ void iDrawQueue() {
     }
     case TYPE_PLAYER: {
       iSetTransparentColor(0, 0, 0, 0.5);
-      if (player.km.la==1){
-      iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
-                       start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
-                       &qbert);}
-      else if (player.km.la==0){
+      if (player.km.la == 1) {
+        iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
+                         start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
+                         &qbert);
+      } else if (player.km.la == 0) {
 
-      iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
-                       start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
-                       &qbert_right);
-      } 
-      else if (player.km.la==2){
+        iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
+                         start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
+                         &qbert_right);
+      } else if (player.km.la == 2) {
 
-      iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
-                       start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
-                       &qbert_up);
-      } 
-      else if (player.km.la==3){
+        iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
+                         start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
+                         &qbert_up);
+      } else if (player.km.la == 3) {
 
-      iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
-                       start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
-                       &qbert_down);
-      }               
+        iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
+                         start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
+                         &qbert_down);
+      }
       iSetColor(240, 10, 10);
       // iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
       break;
@@ -878,6 +876,7 @@ void iRestart() {
 
 void iGame() {
   app_state = STATE_GAME;
+  endgame = false;
   iBlock();
   iPlayer();
   iEnemy();
@@ -1241,6 +1240,7 @@ void iSpecialKeyboard(unsigned char key) {
     default:
       break;
     }
+    printf("%d\n", dir);
     if (key == GLUT_KEY_LEFT || key == GLUT_KEY_RIGHT || key == GLUT_KEY_UP ||
         key == GLUT_KEY_DOWN) {
       // handle scores
