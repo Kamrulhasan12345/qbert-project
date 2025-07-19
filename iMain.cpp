@@ -14,7 +14,7 @@ Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 #define PI 3.14159265
 #define MAX_SIZE 10
 #define ESC 0x1b
-#define NUM_ENEMIES 2
+#define NUM_ENEMIES 1
 
 typedef enum {
   STATE_MENU,
@@ -65,9 +65,9 @@ typedef struct {
 } jumper_t;
 
 typedef struct {
+  jumper_t jump;
   position_t pos;
   int la;
-  jumper_t jump;
 } body_t;
 
 typedef struct {
@@ -115,7 +115,9 @@ player_t player;
 // world_t
 enemy_t enemies[NUM_ENEMIES];
 
-int enemy_step_timer;
+int enemy_step_timer, world_timer;
+
+int dt = 16;
 
 int width = 800, height = 800;
 int sound_1 = -1, sound_2 = -1, sound_3 = -1;
@@ -543,6 +545,11 @@ void iMenu() {
   }
 }
 
+void iQuitGame() {
+  iPauseTimer(enemy_step_timer);
+  iPauseTimer(world_timer);
+}
+
 void iResume();
 
 void iPauseMenu() {
@@ -679,12 +686,13 @@ void iPlayer() {
   player.km.pos.y = visible[idx][1];
   player.km.pos.z = visible[idx][2];
   player.km.jump.active = 0;
+  player.km.jump.duration = 100;
+  player.km.jump.t = 0;
   player.lives = 3;
   player.score = 0;
   player.max_lives = 3;
   player.ko = true;
   if (pause) {
-
     player.km.pos.x = 0;
     player.km.pos.y = 0;
     player.km.pos.z = 0;
@@ -695,7 +703,7 @@ void iLoseLife(player_t *player) {
   if (player->lives > 0)
     player->lives--;
   if (player->lives == 0) {
-    iPauseTimer(enemy_step_timer);
+    iQuitGame();
     iGameOver();
   } else {
     int ind = rand() % n;
@@ -716,24 +724,27 @@ int iBodyMove(position_t pos, body_t *km) {
     // printf("so, up?\n");
     if (y - 2 >= -1 && !tiles[y - 2][x][z].valid) {
       // printf("so, up one block actually?\n");
-      km->pos.x = x, km->pos.y = y - 1, km->pos.z = z;
+      y = y - 1;
       // printf("%lf %lf %lf\n",km->pos.x,km->pos.y,km->pos.z);
     }
     // then go, otherwise stay where you are
   } else if (tiles[y][x][z].valid) {
     // simply walk to this one, with no jump anim
     // printf("so walk straight?\n");
-    km->pos.x = x, km->pos.y = y, km->pos.z = z;
+    0;
   } else if (y + 1 <= MAX_SIZE && tiles[y + 1][x][z].valid) {
     // then move to this one, still a jump anim
     // printf("so down one block?\n");
-    km->pos.x = x, km->pos.y = y + 1, km->pos.z = z;
+    y = y + 1;
   } else {
     // dont move
     // printf("huh? no move? thats boring...\n");
     return 0;
   }
   // now initiate movement and jump animation
+  km->jump.active = true;
+  km->pos.x = x, km->pos.y = y, km->pos.z = z;
+  // TODO: stop jump when duration is reached
   // printf("time to go... yay!!!\n");
   // printf("%lf %lf %lf\n",km->pos.x,km->pos.y,km->pos.z);
   return 1;
@@ -845,7 +856,7 @@ void iEnemyStep() {
       // pathfinding enemy animation
       position_t step = iGetNextStep(enemies[i].km.pos, player.km.pos);
       // printf("Moving to %g, %g, %g.\n", step.x, step.y, step.z);
-      iBodyMove(step, &enemies[i].km);
+      iBodyMove(step, (body_t *)&enemies[i]);
       break;
     }
     }
@@ -860,6 +871,8 @@ void iEnemy() {
     int idx = rand() % visible_count;
     enemies[i].km.pos.x = visible[idx][0], enemies[i].km.pos.y = visible[idx][1],
     enemies[i].km.pos.z = visible[idx][2];
+    enemies[i].km.jump.duration = 100;
+    enemies[i].km.jump.t = 0;
     if (pause) {
       enemies[i].km.pos.x = 3, enemies[i].km.pos.y = 7, enemies[i].km.pos.z = 4;
     }
@@ -874,6 +887,44 @@ void iRestart() {
   pause = false;
 }
 
+void iCheckCompletion() {
+  int i;
+  for (i = 0; i < visible_count; i++) {
+    int x = visible[i][0], y = visible[i][1], z = visible[i][2];
+    if (tiles[y][x][z].state != state_num - 1)
+      break;
+  }
+  if (i >= visible_count) {
+    // completed
+    printf("level completed!\n");
+    // go to next level, or show completion
+  }
+}
+
+void iHandleJump(jumper_t *jumper) {
+  if (!jumper->active)
+    return;
+  // jump;
+  jumper->t += dt;
+  printf("%g\n", jumper->t);
+  if (jumper->t >= jumper->duration)
+    jumper->active = false, jumper->t = 0, printf("jump finished.\n");
+}
+
+void iJump() {
+  // player jump
+  iHandleJump((jumper_t *)&player);
+  for (int i = 0; i < NUM_ENEMIES; i++)
+    iHandleJump((jumper_t *)&enemies[i]);
+}
+
+void iWorldFwd() {
+  // do jump
+  iJump();
+  // check level completion
+  iCheckCompletion();
+}
+
 void iGame() {
   app_state = STATE_GAME;
   endgame = false;
@@ -884,6 +935,11 @@ void iGame() {
     enemy_step_timer = iSetTimer(1000, iEnemyStep);
   else
     iResumeTimer(enemy_step_timer);
+  // set a 60 fps world progress timer that will do what I want at 60fps
+  if (!world_timer)
+    world_timer = iSetTimer(dt, iWorldFwd);
+  else
+    iResumeTimer(world_timer);
   // now going to set a timer that will check if I have completed the level
   // drawqueue[i].pos.x=player.pos.x,drawqueue[i].pos.y=player.pos.y,drawqueue[i].pos.z=player.pos.z;
   // drawqueue[i].flags=0;
@@ -1104,6 +1160,7 @@ void iMouse(int button, int state, int mx, int my) {
         iRestart();
       } else if (pause && mx > 352 && mx < 352 + 145 && my > 440 - 120 && my < 440 - 120 + 35) {
         app_state = STATE_MENU;
+        iQuitGame();
         pause = false;
       } else if (pause && mx > 352 && mx < 352 + 154 && my > 440 - 60 && my < 440 - 60 + 35) {
         bool soundOn = (sound1 || sound2);
@@ -1186,6 +1243,7 @@ void iKeyboard(unsigned char key) {
     case 'q':
     case ESC:
       app_state = STATE_MENU;
+      iQuitGame();
       break;
     case 'r': {
       player.km.pos.x = 0;
@@ -1240,17 +1298,18 @@ void iSpecialKeyboard(unsigned char key) {
     default:
       break;
     }
-    printf("%d\n", dir);
     if (key == GLUT_KEY_LEFT || key == GLUT_KEY_RIGHT || key == GLUT_KEY_UP ||
         key == GLUT_KEY_DOWN) {
       // handle scores
       if (endgame)
         return;
+      if (player.km.jump.active)
+        return;
       position_t target = iPositionFinder(dirs[dir], player.km.pos);
       if (target.x <= -1)
         return;
       player.km.la = dir;
-      iBodyMove(target, &player.km);
+      iBodyMove(target, (body_t *)&player);
       if (tiles[(int)target.y][(int)target.x][(int)target.z].state < state_num - 1) {
         tiles[(int)target.y][(int)target.x][(int)target.z].state++;
         tiles[(int)target.y][(int)target.x][(int)target.z].state %= state_num;
