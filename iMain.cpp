@@ -416,26 +416,19 @@ void iDrawQueue() {
     }
     case TYPE_PLAYER: {
       iSetTransparentColor(0, 0, 0, 0.5);
+      Image *qbert_looker;
       if (player.km.la == 1) {
-        iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
-                         start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
-                         &qbert);
+        qbert_looker = &qbert;
       } else if (player.km.la == 0) {
-
-        iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
-                         start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
-                         &qbert_right);
+        qbert_looker = &qbert_right;
       } else if (player.km.la == 2) {
-
-        iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
-                         start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
-                         &qbert_up);
+        qbert_looker = &qbert_up;
       } else if (player.km.la == 3) {
-
-        iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
-                         start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
-                         &qbert_down);
+        qbert_looker = &qbert_down;
       }
+      iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
+                       start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
+                       qbert_looker);
       iSetColor(240, 10, 10);
       // iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
       break;
@@ -686,7 +679,7 @@ void iPlayer() {
   player.km.pos.y = visible[idx][1];
   player.km.pos.z = visible[idx][2];
   player.km.jump.active = 0;
-  player.km.jump.duration = 100;
+  player.km.jump.duration = 250;
   player.km.jump.t = 0;
   player.lives = 3;
   player.score = 0;
@@ -743,8 +736,9 @@ int iBodyMove(position_t pos, body_t *km) {
   }
   // now initiate movement and jump animation
   km->jump.active = true;
-  km->pos.x = x, km->pos.y = y, km->pos.z = z;
-  // TODO: stop jump when duration is reached
+  km->jump.from.x = km->pos.x, km->jump.from.y = km->pos.y, km->jump.from.z = km->pos.z;
+  km->jump.to.x = x, km->jump.to.y = y, km->jump.to.z = z;
+  km->jump.t = 0;
   // printf("time to go... yay!!!\n");
   // printf("%lf %lf %lf\n",km->pos.x,km->pos.y,km->pos.z);
   return 1;
@@ -854,7 +848,9 @@ void iEnemyStep() {
             break;
         }*/
       // pathfinding enemy animation
-      position_t step = iGetNextStep(enemies[i].km.pos, player.km.pos);
+      position_t step =
+          iGetNextStep(enemies[i].km.jump.active ? enemies[i].km.jump.to : enemies[i].km.pos,
+                       player.km.jump.active ? player.km.jump.to : player.km.pos);
       // printf("Moving to %g, %g, %g.\n", step.x, step.y, step.z);
       iBodyMove(step, (body_t *)&enemies[i]);
       break;
@@ -901,21 +897,27 @@ void iCheckCompletion() {
   }
 }
 
-void iHandleJump(jumper_t *jumper) {
-  if (!jumper->active)
+void iHandleJump(body_t *body) {
+  if (!body->jump.active)
     return;
   // jump;
-  jumper->t += dt;
-  printf("%g\n", jumper->t);
-  if (jumper->t >= jumper->duration)
-    jumper->active = false, jumper->t = 0, printf("jump finished.\n");
+  body->jump.t += dt;
+  double u = body->jump.t / body->jump.duration;
+  if (u > 1.0)
+    u = 1.0;
+  body->pos.x = body->jump.from.x + (body->jump.to.x - body->jump.from.x) * u;
+  body->pos.z = body->jump.from.z + (body->jump.to.z - body->jump.from.z) * u;
+  body->pos.y =
+      body->jump.from.y + (body->jump.to.y - body->jump.from.y) * u - 4 * 0.5 * (u - u * u);
+  if (body->jump.t >= body->jump.duration)
+    body->jump.active = false, body->jump.t = 0;
 }
 
 void iJump() {
   // player jump
-  iHandleJump((jumper_t *)&player);
+  iHandleJump((body_t *)&player);
   for (int i = 0; i < NUM_ENEMIES; i++)
-    iHandleJump((jumper_t *)&enemies[i]);
+    iHandleJump((body_t *)&enemies[i]);
 }
 
 void iWorldFwd() {
@@ -1246,6 +1248,8 @@ void iKeyboard(unsigned char key) {
       iQuitGame();
       break;
     case 'r': {
+      if (endgame)
+        return;
       player.km.pos.x = 0;
       player.km.pos.y = 0;
       player.km.pos.z = 0;
