@@ -364,16 +364,8 @@ void iDrawEnemy(enemy_t *enemy) {
 }
 
 bool iPECollision(enemy_t *enemy) {
-  double pX, pY, pZ, eX, eY, eZ;
-  if (player.km.jump.active)
-    pX = player.km.jump.to.x, pY = player.km.jump.to.y, pZ = player.km.jump.to.z;
-  else
-    pX = player.km.pos.x, pY = player.km.pos.y, pZ = player.km.pos.z;
-  if (enemy->km.jump.active)
-    eX = enemy->km.jump.to.x, eY = enemy->km.jump.to.y, eZ = enemy->km.jump.to.z;
-  else
-    eX = enemy->km.pos.x, eY = enemy->km.pos.y, eZ = enemy->km.pos.z;
-  if ((pX == eX) && (pY == eY) && (pZ == eZ))
+  if ((player.km.pos.x == enemy->km.pos.x) && (player.km.pos.y == enemy->km.pos.y) &&
+      (player.km.pos.z == enemy->km.pos.z))
     return true;
   else
     return false;
