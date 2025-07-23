@@ -1,7 +1,3 @@
-/*
-    author: S. M. Shahriar Nirjon
-    last modified: August 8, 2008
-*/
 #include "iGraphics.h"
 enum
 {
@@ -13,7 +9,7 @@ int pic_x, pic_y;
 int idle_idx = 0;
 int jump_idx = 0;
 int walk_idx = 0;
-int state = IDLE;
+int m_state = IDLE;
 char monster_idle[18][100];
 char monster_jump[6][100];
 char monster_walk[24][100];
@@ -38,7 +34,7 @@ void populate_monster_images()
 
 void update_monster()
 {
-    switch (state)
+    switch (m_state)
     {
     case IDLE:
         monster_image = monster_idle[idle_idx];
@@ -53,7 +49,7 @@ void update_monster()
         jump_idx = (jump_idx + 1) % 6;
         if (jump_idx == 0)
         {
-            state = IDLE;
+            m_state = IDLE;
         }
         break;
     }
@@ -64,60 +60,16 @@ void update_monster()
 void iDraw()
 {
     // place your drawing codes here
-
     iClear();
     iShowImage(pic_x, pic_y, monster_image);
-    // iShowBMP(pic_x, pic_y, "wheel.bmp");
+    iShowSpeed(0, 0);
 }
 
 /*
-    function iMouseMove() is called when the user presses and drags the mouse.
-    (mx, my) is the position where the mouse pointer is.
-*/
-void iMouseMove(int mx, int my)
-{
-    // place your codes here
-}
-
-/*
-    function iMouse() is called when the user presses/releases the mouse.
-    (mx, my) is the position where the mouse pointer is.
-*/
-void iMouse(int button, int state, int mx, int my)
-{
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
-    {
-        // place your codes here
-    }
-    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
-    {
-        // place your codes here
-    }
-}
-
-/*
-function iMouseDrag() is called when the user presses and drags the mouse.
-(mx, my) is the position where the mouse pointer is.
-*/
-void iMouseDrag(int mx, int my)
-{
-    // place your codes here
-}
-
-/*
-function iMouseWheel() is called when the user scrolls the mouse wheel.
-dir = 1 for up, -1 for down.
-*/
-void iMouseWheel(int dir, int mx, int my)
-{
-    // place your code here
-}
-
-/*
-    function iKeyboard() is called whenever the user hits a key in keyboard.
+    function iKeyPress() is called whenever the user hits a key in keyboard.
     key- holds the ASCII value of the key pressed.
 */
-void iKeyboard(unsigned char key)
+void iKeyPress(unsigned char key)
 {
     if (key == 'x')
     {
@@ -128,7 +80,7 @@ void iKeyboard(unsigned char key)
 }
 
 /*
-    function iSpecialKeyboard() is called whenver user hits special keys like-
+    function iSpecialKeyPress() is called whenver user hits special keys like-
     function keys, home, end, pg up, pg down, arraows etc. you have to use
     appropriate constants to detect them. A list is:
     GLUT_KEY_F1, GLUT_KEY_F2, GLUT_KEY_F3, GLUT_KEY_F4, GLUT_KEY_F5, GLUT_KEY_F6,
@@ -136,42 +88,39 @@ void iKeyboard(unsigned char key)
     GLUT_KEY_LEFT, GLUT_KEY_UP, GLUT_KEY_RIGHT, GLUT_KEY_DOWN, GLUT_KEY_PAGE UP,
     GLUT_KEY_PAGE DOWN, GLUT_KEY_HOME, GLUT_KEY_END, GLUT_KEY_INSERT
 */
-void iSpecialKeyboard(unsigned char key)
+void iSpecialKeyPress(unsigned char key)
 {
-
     if (key == GLUT_KEY_END)
     {
         exit(0);
     }
     if (key == GLUT_KEY_LEFT)
     {
-        pic_x--;
+        pic_x -= 2;
     }
     if (key == GLUT_KEY_RIGHT)
     {
-        pic_x++;
-        state = WALK;
+        pic_x += 2;
+        m_state = WALK;
     }
     if (key == GLUT_KEY_UP)
     {
-        pic_y++;
-        state = JUMP;
+        pic_y += 2;
+        m_state = JUMP;
     }
     if (key == GLUT_KEY_DOWN)
     {
-        pic_y--;
+        pic_y -= 2;
     }
     // place your codes for other keys here
 }
 
 int main(int argc, char *argv[])
 {
-    glutInit(&argc, argv);
-    // place your own initialization codes here.
     pic_x = 0;
     pic_y = 0;
     populate_monster_images();
     iSetTimer(100, update_monster);
-    iInitialize(900, 900, "SpriteDemo");
+    iOpenWindow(900, 900, "SpriteDemo");
     return 0;
 }

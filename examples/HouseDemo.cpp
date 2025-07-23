@@ -89,56 +89,14 @@ void iDraw()
     iFilledCircle(sun_x, sun_y, sun_r);
     drawSunRays();
 
-    drawCoordinateAxes(50.0);
+    // drawCoordinateAxes(50.0);
 }
 
 /*
-function iMouseMove() is called when the user moves the mouse.
-(mx, my) is the position where the mouse pointer is.
-*/
-void iMouseMove(int mx, int my)
-{
-    // place your codes here
-}
-/*
-function iMouseDrag() is called when the user presses and drags the mouse.
-(mx, my) is the position where the mouse pointer is.
-*/
-void iMouseDrag(int mx, int my)
-{
-    // place your codes here
-}
-
-/*
-function iMouseWheel() is called when the user scrolls the mouse wheel.
-dir = 1 for up, -1 for down.
-*/
-void iMouseWheel(int dir, int mx, int my)
-{
-    // place your code here
-}
-
-/*
-        function iMouse() is called when the user presses/releases the mouse.
-        (mx, my) is the position where the mouse pointer is.
-*/
-void iMouse(int button, int state, int mx, int my)
-{
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
-    {
-        // place your codes here
-    }
-    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
-    {
-        // place your codes here
-    }
-}
-
-/*
-        function iKeyboard() is called whenever the user hits a key in keyboard.
+        function iKeyPress() is called whenever the user hits a key in keyboard.
         key- holds the ASCII value of the key pressed.
 */
-void iKeyboard(unsigned char key)
+void iKeyPress(unsigned char key)
 {
     if (key == 'q')
     {
@@ -148,7 +106,7 @@ void iKeyboard(unsigned char key)
 }
 
 /*
-        function iSpecialKeyboard() is called whenver user hits special keys like-
+        function iSpecialKeyPress() is called whenver user hits special keys like-
         function keys, home, end, pg up, pg down, arraows etc. you have to use
         appropriate constants to detect them. A list is:
         GLUT_KEY_F1, GLUT_KEY_F2, GLUT_KEY_F3, GLUT_KEY_F4, GLUT_KEY_F5, GLUT_KEY_F6,
@@ -156,7 +114,7 @@ void iKeyboard(unsigned char key)
         GLUT_KEY_LEFT, GLUT_KEY_UP, GLUT_KEY_RIGHT, GLUT_KEY_DOWN, GLUT_KEY_PAGE UP,
         GLUT_KEY_PAGE DOWN, GLUT_KEY_HOME, GLUT_KEY_END, GLUT_KEY_INSERT
 */
-void iSpecialKeyboard(unsigned char key)
+void iSpecialKeyPress(unsigned char key)
 {
     if (key == GLUT_KEY_END)
     {
@@ -167,8 +125,6 @@ void iSpecialKeyboard(unsigned char key)
 
 int main(int argc, char *argv[])
 {
-    glutInit(&argc, argv);
-    // place your own initialization codes here.
-    iInitialize(SCREEN_WIDTH, SCREEN_HEIGHT, "Demo!");
+    iOpenWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Demo!");
     return 0;
 }

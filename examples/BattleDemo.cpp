@@ -1,7 +1,3 @@
-/*
-    author: S. M. Shahriar Nirjon
-    last modified: August 8, 2008
-*/
 #include "iGraphics.h"
 
 typedef enum
@@ -13,7 +9,7 @@ typedef enum
 
 typedef struct
 {
-    Image idle[4], walk[6], jump[8];
+    FrameSet idle, walk, jump;
     Sprite sprite;
     State state;
     int direction; // 1 for right, -1 for left
@@ -23,23 +19,24 @@ Monster pinkMonster;
 
 typedef struct
 {
-    Image idle[18], walk[25], jump[25];
+    FrameSet idle, walk, jump;
     Sprite sprite;
     State state;
     int direction; // 1 for right, -1 for left
 } Golem;
 
+Image bg;
+
 Golem golem;
 
 void loadPinkMonster()
 {
-    iLoadFramesFromSheet(pinkMonster.idle, "assets/images/sprites/1 Pink_Monster/Pink_Monster_Idle_4.png", 1, 4);
-    iLoadFramesFromSheet(pinkMonster.walk, "assets/images/sprites/1 Pink_Monster/Pink_Monster_Walk_6.png", 1, 6);
-    iLoadFramesFromSheet(pinkMonster.jump, "assets/images/sprites/1 Pink_Monster/Pink_Monster_Jump_8.png", 1, 8);
+    iLoadFramesFromSheet(&pinkMonster.idle, "assets/images/sprites/1 Pink_Monster/Pink_Monster_Idle_4.png", 1, 4);
+    iLoadFramesFromSheet(&pinkMonster.walk, "assets/images/sprites/1 Pink_Monster/Pink_Monster_Walk_6.png", 1, 6);
+    iLoadFramesFromSheet(&pinkMonster.jump, "assets/images/sprites/1 Pink_Monster/Pink_Monster_Jump_8.png", 1, 8);
 
-    iInitSprite(&pinkMonster.sprite, -1);
-    iChangeSpriteFrames(&pinkMonster.sprite, pinkMonster.idle, 4);
-    iSetSpritePosition(&pinkMonster.sprite, 200, 0);
+    iChangeSpriteFrames(&pinkMonster.sprite, &pinkMonster.idle);
+    iSetSpritePosition(&pinkMonster.sprite, 250, 110);
     iScaleSprite(&pinkMonster.sprite, 3.0);
     pinkMonster.state = IDLE;
     pinkMonster.direction = 1; // 1 for right, -1 for left
@@ -47,13 +44,12 @@ void loadPinkMonster()
 
 void loadGolem()
 {
-    iLoadFramesFromFolder(golem.idle, "assets/images/sprites/Golem_2/Idle Blinking");
-    iLoadFramesFromFolder(golem.walk, "assets/images/sprites/Golem_2/Walking");
-    iLoadFramesFromFolder(golem.jump, "assets/images/sprites/Golem_2/Jump Start");
+    iLoadFramesFromFolder(&golem.idle, "assets/images/sprites/Golem_2/Idle Blinking");
+    iLoadFramesFromFolder(&golem.walk, "assets/images/sprites/Golem_2/Walking");
+    iLoadFramesFromFolder(&golem.jump, "assets/images/sprites/Golem_2/Jump Start");
 
-    iInitSprite(&golem.sprite, -1);
-    iChangeSpriteFrames(&golem.sprite, golem.idle, 18);
-    iSetSpritePosition(&golem.sprite, 300, -75);
+    iChangeSpriteFrames(&golem.sprite, &golem.idle);
+    iSetSpritePosition(&golem.sprite, 250, 35);
     iScaleSprite(&golem.sprite, 0.5);
     iMirrorSprite(&golem.sprite, HORIZONTAL);
     golem.state = IDLE;
@@ -71,14 +67,14 @@ void iAnim()
             !isSpecialKeyPressed(GLUT_KEY_RIGHT))
         {
             pinkMonster.state = IDLE;
-            iChangeSpriteFrames(&pinkMonster.sprite, pinkMonster.idle, 4);
+            iChangeSpriteFrames(&pinkMonster.sprite, &pinkMonster.idle);
         }
         break;
     case JUMP:
         if (!isSpecialKeyPressed(GLUT_KEY_UP))
         {
             pinkMonster.state = IDLE;
-            iChangeSpriteFrames(&pinkMonster.sprite, pinkMonster.idle, 4);
+            iChangeSpriteFrames(&pinkMonster.sprite, &pinkMonster.idle);
         }
         break;
     }
@@ -92,10 +88,16 @@ void iDraw()
 {
     // place your drawing codes here
     iClear();
+    iSetColor(255, 255, 255);
+    iFilledRectangle(0, 0, 800, 400);
+    iShowLoadedImage(0, 0, &bg);
     iShowSprite(&golem.sprite);
     iShowSprite(&pinkMonster.sprite);
 
-    if (iCheckCollision(&golem.sprite, &pinkMonster.sprite))
+    int count = iCheckCollision(&golem.sprite, &pinkMonster.sprite);
+    int visibleCount = iGetVisiblePixelsCount(&pinkMonster.sprite);
+
+    if (count / (1.0 * visibleCount) > 0.01) // 1% collision threshold // or we can just use count > 0
     {
         iSetColor(255, 0, 0);
         iText(100, 300, "Collision Detected", GLUT_BITMAP_TIMES_ROMAN_24);
@@ -105,53 +107,10 @@ void iDraw()
 }
 
 /*
-function iMouseMove() is called when the user moves the mouse.
-(mx, my) is the position where the mouse pointer is.
-*/
-void iMouseMove(int mx, int my)
-{
-    // place your codes here
-}
-
-/*
-function iMouseDrag() is called when the user presses and drags the mouse.
-(mx, my) is the position where the mouse pointer is.
-*/
-void iMouseDrag(int mx, int my)
-{
-    // place your codes here
-}
-
-/*
-function iMouseWheel() is called when the user scrolls the mouse wheel.
-dir = 1 for up, -1 for down.
-*/
-void iMouseWheel(int dir, int mx, int my)
-{
-    // place your code here
-}
-
-/*
-    function iMouse() is called when the user presses/releases the mouse.
-    (mx, my) is the position where the mouse pointer is.
-*/
-void iMouse(int button, int state, int mx, int my)
-{
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
-    {
-        // place your codes here
-    }
-    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
-    {
-        // place your codes here
-    }
-}
-
-/*
-    function iKeyboard() is called whenever the user hits a key in keyboard.
+    function iKeyPress() is called whenever the user hits a key in keyboard.
     key- holds the ASCII value of the key pressed.
 */
-void iKeyboard(unsigned char key)
+void iKeyPress(unsigned char key)
 {
     if (key == 'x')
     {
@@ -162,7 +121,7 @@ void iKeyboard(unsigned char key)
 }
 
 /*
-    function iSpecialKeyboard() is called whenver user hits special keys like-
+    function iSpecialKeyPress() is called whenver user hits special keys like-
     function keys, home, end, pg up, pg down, arraows etc. you have to use
     appropriate constants to detect them. A list is:
     GLUT_KEY_F1, GLUT_KEY_F2, GLUT_KEY_F3, GLUT_KEY_F4, GLUT_KEY_F5, GLUT_KEY_F6,
@@ -170,7 +129,7 @@ void iKeyboard(unsigned char key)
     GLUT_KEY_LEFT, GLUT_KEY_UP, GLUT_KEY_RIGHT, GLUT_KEY_DOWN, GLUT_KEY_PAGE UP,
     GLUT_KEY_PAGE DOWN, GLUT_KEY_HOME, GLUT_KEY_END, GLUT_KEY_INSERT
 */
-void iSpecialKeyboard(unsigned char key)
+void iSpecialKeyPress(unsigned char key)
 {
 
     if (key == GLUT_KEY_END)
@@ -186,11 +145,12 @@ void iSpecialKeyboard(unsigned char key)
         }
         else
         {
-            pinkMonster.sprite.x--;
+            golem.sprite.x += 2;
+            iWrapImage(&bg, 2);
             if (pinkMonster.state != WALK)
             {
                 pinkMonster.state = WALK;
-                iChangeSpriteFrames(&pinkMonster.sprite, pinkMonster.walk, 6);
+                iChangeSpriteFrames(&pinkMonster.sprite, &pinkMonster.walk);
             }
         }
     }
@@ -203,11 +163,12 @@ void iSpecialKeyboard(unsigned char key)
         }
         else
         {
-            pinkMonster.sprite.x++;
+            golem.sprite.x -= 2;
+            iWrapImage(&bg, -2);
             if (pinkMonster.state != WALK)
             {
                 pinkMonster.state = WALK;
-                iChangeSpriteFrames(&pinkMonster.sprite, pinkMonster.walk, 6);
+                iChangeSpriteFrames(&pinkMonster.sprite, &pinkMonster.walk);
             }
         }
     }
@@ -217,7 +178,7 @@ void iSpecialKeyboard(unsigned char key)
         if (pinkMonster.state != JUMP)
         {
             pinkMonster.state = JUMP;
-            iChangeSpriteFrames(&pinkMonster.sprite, pinkMonster.jump, 8);
+            iChangeSpriteFrames(&pinkMonster.sprite, &pinkMonster.jump);
         }
     }
     if (key == GLUT_KEY_DOWN)
@@ -229,11 +190,11 @@ void iSpecialKeyboard(unsigned char key)
 
 int main(int argc, char *argv[])
 {
-    glutInit(&argc, argv);
-    // place your own initialization codes here.
+    iSetTimer(100, iAnim);
     loadPinkMonster();
     loadGolem();
-    iSetTimer(100, iAnim);
-    iInitialize(800, 400, "SpriteDemo");
+    iLoadImage(&bg, "assets/images/background.jpg");
+    iResizeImage(&bg, 800, 400);
+    iOpenWindow(800, 400, "BattleDemo");
     return 0;
 }

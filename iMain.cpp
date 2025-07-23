@@ -7,8 +7,10 @@
 #include "iGraphics.h"
 #include "iSound.h"
 
-Image bg, help, life, frames[2], frames_1[2], spin_frame[6], ball_frame[2], qbert_invert[2], qbert,
-    pause_button, pause_text, dialogue, gameover, qbert_up, qbert_down, qbert_right;
+Image bg, help, life, qbert, pause_button, pause_text, dialogue, gameover, qbert_up, qbert_down,
+    qbert_right;
+Image *qbert_looker;
+FrameSet frames, frames_1, spin_frame, ball_frame, qbert_invert;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 
 #define PI 3.14159265
@@ -230,16 +232,16 @@ void iLoadResource() {
   iInitSprite(&qbert_spin);
   iInitSprite(&ball);
   iInitSprite(&qbert_inverse);
-  iLoadFramesFromFolder(frames, "assets/images/sprites/snake");
-  iLoadFramesFromFolder(frames_1, "assets/images/sprites/qbert_jump");
-  iLoadFramesFromFolder(spin_frame, "assets/images/sprites/spin");
-  iLoadFramesFromFolder(ball_frame, "assets/images/sprites/ball");
-  iLoadFramesFromFolder(qbert_invert, "assets/images/sprites/qbert_invert");
-  iChangeSpriteFrames(&snake, frames, 2);
-  iChangeSpriteFrames(&qbert_jump, frames_1, 2);
-  iChangeSpriteFrames(&qbert_spin, spin_frame, 6);
-  iChangeSpriteFrames(&ball, ball_frame, 2);
-  iChangeSpriteFrames(&qbert_inverse, qbert_invert, 2);
+  iLoadFramesFromFolder(&frames, "assets/images/sprites/snake");
+  iLoadFramesFromFolder(&frames_1, "assets/images/sprites/qbert_jump");
+  iLoadFramesFromFolder(&spin_frame, "assets/images/sprites/spin");
+  iLoadFramesFromFolder(&ball_frame, "assets/images/sprites/ball");
+  iLoadFramesFromFolder(&qbert_invert, "assets/images/sprites/qbert_invert");
+  iChangeSpriteFrames(&snake, &frames);
+  iChangeSpriteFrames(&qbert_jump, &frames_1);
+  iChangeSpriteFrames(&qbert_spin, &spin_frame);
+  iChangeSpriteFrames(&ball, &ball_frame);
+  iChangeSpriteFrames(&qbert_inverse, &qbert_invert);
   iScaleSprite(&snake, 2.0);
   iScaleSprite(&qbert_inverse, 2.0);
   iScaleSprite(&ball, 2.0);
@@ -251,8 +253,18 @@ void iLoadResource() {
   iSetSpritePosition(&ball, 850, 200);
 }
 
+void iExit() {
+  // free everything
+  // close window
+  iCloseWindow();
+}
+
 void iLoadLevel(int level) {
   // load a selective level into global variables
+  char filePath[50];
+  snprintf(filePath, 50, "./saves/levels/%d", level);
+  FILE *fp = fopen(filePath, "r");
+  // now scanf for the appropriate file structure
 }
 
 void iCompleteLevel() {
@@ -351,9 +363,17 @@ void iDrawEnemy(enemy_t *enemy) {
                 tile_width / 5);
 }
 
-bool collision(player_t *player, enemy_t *enemy) {
-  if ((player->km.pos.x == enemy->km.pos.x) && (player->km.pos.y == enemy->km.pos.y) &&
-      (player->km.pos.z == enemy->km.pos.z))
+bool iPECollision(enemy_t *enemy) {
+  double pX, pY, pZ, eX, eY, eZ;
+  if (player.km.jump.active)
+    pX = player.km.jump.to.x, pY = player.km.jump.to.y, pZ = player.km.jump.to.z;
+  else
+    pX = player.km.pos.x, pY = player.km.pos.y, pZ = player.km.pos.z;
+  if (enemy->km.jump.active)
+    eX = enemy->km.jump.to.x, eY = enemy->km.jump.to.y, eZ = enemy->km.jump.to.z;
+  else
+    eX = enemy->km.pos.x, eY = enemy->km.pos.y, eZ = enemy->km.pos.z;
+  if ((pX == eX) && (pY == eY) && (pZ == eZ))
     return true;
   else
     return false;
@@ -416,7 +436,6 @@ void iDrawQueue() {
     }
     case TYPE_PLAYER: {
       iSetTransparentColor(0, 0, 0, 0.5);
-      Image *qbert_looker;
       if (player.km.la == 1) {
         qbert_looker = &qbert;
       } else if (player.km.la == 0) {
@@ -715,20 +734,22 @@ int iBodyMove(position_t pos, body_t *km) {
   }
   if ((y - 1 >= 0 && tiles[y - 1][x][z].valid) && 1) {
     // printf("so, up?\n");
+    // we are using y-2 check here only for the uppest block since if we are at y = 1, we must be
+    // able to move up regardless of y-2's appeareance since y-2 cant be present in this case
     if (y - 2 >= -1 && !tiles[y - 2][x][z].valid) {
       // printf("so, up one block actually?\n");
-      y = y - 1;
+      x = x, z = z, y = y - 1;
       // printf("%lf %lf %lf\n",km->pos.x,km->pos.y,km->pos.z);
     }
     // then go, otherwise stay where you are
   } else if (tiles[y][x][z].valid) {
     // simply walk to this one, with no jump anim
     // printf("so walk straight?\n");
-    0;
+    x = x, y = y, z = z;
   } else if (y + 1 <= MAX_SIZE && tiles[y + 1][x][z].valid) {
     // then move to this one, still a jump anim
     // printf("so down one block?\n");
-    y = y + 1;
+    x = x, z = z, y = y + 1;
   } else {
     // dont move
     // printf("huh? no move? thats boring...\n");
@@ -909,6 +930,8 @@ void iHandleJump(body_t *body) {
   body->pos.z = body->jump.from.z + (body->jump.to.z - body->jump.from.z) * u;
   body->pos.y =
       body->jump.from.y + (body->jump.to.y - body->jump.from.y) * u - 4 * 0.5 * (u - u * u);
+  // body->pos.y = body->jump.from.y + (body->jump.to.y - body->jump.from.y) * u -
+  //               0.0000196f * body->jump.t * (body->jump.duration - body->jump.t);
   if (body->jump.t >= body->jump.duration)
     body->jump.active = false, body->jump.t = 0;
 }
@@ -1045,7 +1068,7 @@ void iDraw() {
     }
 
     for (int i = 0; i < NUM_ENEMIES; i++) {
-      if (collision(&player, &enemies[i])) {
+      if (iPECollision(&enemies[i])) {
         iLoseLife(&player);
         return;
       }
@@ -1114,16 +1137,6 @@ presses/releases the mouse. (mx, my) is the position
 where the mouse pointer is.
 */
 void iMouse(int button, int state, int mx, int my) {
-  // if (button == GLUT_LEFT_BUTTON && state ==
-  // GLUT_DOWN)
-  // {
-  //     // pl
-  // }
-  // if (button == GLUT_RIGHT_BUTTON && state ==
-  // GLUT_DOWN)
-  // {
-  //     // place your codes here
-  // }
   if (app_state == STATE_MENU) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
       if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 500 && my < 530) {
@@ -1147,7 +1160,7 @@ void iMouse(int button, int state, int mx, int my) {
       { iCredits();
       } */
       else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 110 && my < 140) {
-        exit(0);
+        iExit();
       }
     }
   } else if (app_state == STATE_EDITOR) {
@@ -1222,7 +1235,7 @@ function iKeyboard() is called whenever the user hits a
 key in keyboard. key- holds the ASCII value of the key
 pressed.
 */
-void iKeyboard(unsigned char key) {
+void iKeyPress(unsigned char key) {
   if (app_state == STATE_EDITOR) {
     switch (key) {
     case 'w':
@@ -1279,7 +1292,7 @@ GLUT_KEY_F10, GLUT_KEY_F11, GLUT_KEY_F12,
 GLUT_KEY_LEFT, GLUT_KEY_UP, GLUT_KEY_RIGHT,
 GLUT_KEY_DOWN, GLUT_KEY_PAGE_UP, GLUT_KEY_PAGE_DOWN,
 GLUT_KEY_HOME, GLUT_KEY_END, GLUT_KEY_INSERT */
-void iSpecialKeyboard(unsigned char key) {
+void iSpecialKeyPress(unsigned char key) {
   if (app_state == STATE_MENU) {
   } else if (app_state == STATE_EDITOR) {
   } else if (app_state == STATE_GAME) {
@@ -1302,6 +1315,7 @@ void iSpecialKeyboard(unsigned char key) {
     default:
       break;
     }
+
     if (key == GLUT_KEY_LEFT || key == GLUT_KEY_RIGHT || key == GLUT_KEY_UP ||
         key == GLUT_KEY_DOWN) {
       // handle scores

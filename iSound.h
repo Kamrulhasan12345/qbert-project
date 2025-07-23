@@ -1,9 +1,16 @@
-//
-//  Original Author: Mahir Labib Dihan
-//  last modified: May 19, 2025
-//
-//  Version: 1.0.0
-//
+/***
+ * iSound.h: v0.1.1
+ * This file provides a simple sound management system using SDL2 Library.
+ * It includes functions to initialize sound, play sounds, control volume,
+ * pause, resume, and stop sounds.
+ * It supports multiple sound channels and allows for basic sound operations.
+ * This library is designed to be easy to use for beginners and supports basic sound operations.
+ *
+ * Author: Mahir Labib Dihan
+ * Email: mahirlabibdihan@gmail.com
+ * GitHub: https://github.com/mahirlabibdihan
+ * Date: July 11, 2025
+ */
 
 #include <SDL.h>
 #include <SDL_mixer.h>
@@ -11,6 +18,8 @@
 using namespace std;
 
 Mix_Chunk *channelChunks[8];
+bool soundInitialized = false;
+
 void iSetVolume(int channel, int volumePercent)
 {
     if (channel >= 0)
@@ -79,8 +88,30 @@ void iStopAllSounds()
     }
 }
 
-int iPlaySound(const char *filename, bool loop = false, int volume = 100) // If loop==true , then the audio will play again and again
+void iInitializeSound()
 {
+    if (soundInitialized)
+        return;
+
+    if (SDL_Init(SDL_INIT_AUDIO) < 0)
+    {
+        printf("SDL_Init failed: %s\n", SDL_GetError());
+        return;
+    }
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
+    {
+        printf("SDL_mixer could not initialize! Mix_Error: %s\n", Mix_GetError());
+        return;
+    }
+    Mix_ChannelFinished(channelFinishedCallback);
+
+    soundInitialized = true;
+}
+
+int iPlaySound(const char *filename, int loop = 0, int volume = 100) // If loop==true , then the audio will play again and again
+{
+    iInitializeSound(); // Ensure it's initialized before playing
+
     Mix_Chunk *sound = Mix_LoadWAV(filename);
     if (!sound)
     {
@@ -98,21 +129,6 @@ int iPlaySound(const char *filename, bool loop = false, int volume = 100) // If 
     iSetVolume(channel, volume);    // Set the volume
     channelChunks[channel] = sound; //
     return channel;
-}
-
-void iInitializeSound()
-{
-    if (SDL_Init(SDL_INIT_AUDIO) < 0)
-    {
-        printf("SDL_Init failed: %s\n", SDL_GetError());
-        return;
-    }
-    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
-    {
-        printf("SDL_mixer could not initialize! Mix_Error: %s\n", Mix_GetError());
-        return;
-    }
-    Mix_ChannelFinished(channelFinishedCallback);
 }
 
 void iFreeSound()

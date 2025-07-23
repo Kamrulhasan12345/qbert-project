@@ -1,7 +1,18 @@
+/***
+ * iGraphics.h: v0.6.0
+ * A simple graphics library for C++ using OpenGL and GLUT.
+ * Provides functions for drawing shapes, images, and handling input events.
+ * This library is designed to be easy to use for beginners and supports basic graphics operations.
+ * It includes features like image loading, sprite handling, and collision detection.
+ *
+ * Author: Mahir Labib Dihan
+ * Email: mahirlabibdihan@gmail.com
+ * GitHub: https://github.com/mahirlabibdihan
+ * Date: July 21, 2025
+ */
+
 //
 //  Original Author: S. M. Shahriar Nirjon
-//  last modified: Jun 24, 2025 (Mahir Labib Dihan)
-//
 //  Version: 2.0.2012.2015.2024.2025
 //
 
@@ -12,6 +23,7 @@
 #include <tuple>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -19,42 +31,57 @@
 #include <unistd.h>
 #endif
 
-#include "glut.h"
-#include "freeglut_ext.h"
+#include "freeglut.h"
 #include <time.h>
+#include <unordered_map>
 #include <math.h>
 #include <dirent.h>
+#include <list>
 #include <sys/stat.h>
 // #include "glaux.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#define STBIRDEF extern
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include "stb_image_resize.h"
-using namespace std;
+#include "stb_image_resize2.h"
+
+#define NANOSVG_IMPLEMENTATION
+#include "nanosvg.h"
+#define NANOSVGRAST_IMPLEMENTATION
+#include "nanosvgrast.h"
 
 static int transparent = 1;
 static int isFullScreen = 0;
+static int isGameMode = 0;
+static int programEnded = 0;
+const char *iWindowTitle = nullptr;
 typedef struct
 {
     unsigned char *data;
     int width, height, channels;
     GLuint textureId; // OpenGL texture ID
+    // image type svg and non-svg
+    bool isSVG = false; // true if the image is SVG, false if it's a raster image
 } Image;
 
 typedef struct
 {
-    int x, y;
-    Image *frames; // Array of individual frame images
-    int currentFrame;
-    int totalFrames;
-    unsigned char *collisionMask;
-    // int ignoreColor;
+    Image *frames = nullptr; // Array of frames
+    int count = 0;
+} FrameSet;
 
+typedef struct
+{
+    int x = 0, y = 0;
+    FrameSet frameSet;
+    int currentFrame = -1;
+    unsigned char *collisionMask = nullptr;
+    // int ignoreColor;
     // Tracking transformation
-    float scale;
-    bool flipHorizontal, flipVertical;
-    float rotation;                         // in radians
-    float rotationCenterX, rotationCenterY; // Center of rotation relative to the sprite's top-left corner
+    float scale = 1.0f;
+    bool flipHorizontal = false, flipVertical = false;
+    float rotation = 0.0f;                                // in radians
+    float rotationCenterX = 0.0f, rotationCenterY = 0.0f; // Center of rotation relative to the sprite's top-left corner
 } Sprite;
 
 enum MirrorState
@@ -73,23 +100,23 @@ int ifft = 0;
 
 #define MAX_TIMERS 10
 
-void (*iAnimFunction[MAX_TIMERS])(void) = {0};
-int iAnimCount = 0;
-int iAnimDelays[MAX_TIMERS];
-int iAnimPause[MAX_TIMERS];
+void iDraw() __attribute__((weak));
+void iKeyboard(unsigned char, int) __attribute__((weak)); // Deprecated: Use iKeyPress instead
+void iKeyPress(unsigned char) __attribute__((weak));
+void iKeyRelease(unsigned char) __attribute__((weak));
+void iSpecialKeyPress(unsigned char) __attribute__((weak));
+void iSpecialKeyboard(unsigned char, int) __attribute__((weak));
+void iSpecialKeyRelease(unsigned char) __attribute__((weak));
+void iMouse(int button, int state, int x, int y) __attribute__((weak));
+void iMouseClick(int button, int state, int x, int y) __attribute__((weak));
+void iMouseMove(int, int) __attribute__((weak)); // New function
+void iMouseDrag(int, int) __attribute__((weak)); // Renamed from iMouseMove to iMouseDrag
+void iMouseWheel(int dir, int x, int y) __attribute__((weak));
+void iResize(int width, int height) __attribute__((weak));
 
-void iDraw();
-void iKeyboard(unsigned char);
-void iSpecialKeyboard(unsigned char);
-void iMouseDrag(int, int); // Renamed from iMouseMove to iMouseDrag
-void iMouseMove(int, int); // New function
-void iMouse(int button, int state, int x, int y);
-void iMouseWheel(int dir, int x, int y);
-// void iResize(int width, int height);
-
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#define swap(a, b)            \
+#define mmax(a, b) ((a) > (b) ? (a) : (b))
+#define mmin(a, b) ((a) < (b) ? (a) : (b))
+#define sswap(a, b)           \
     do                        \
     {                         \
         typeof(a) temp = (a); \
@@ -107,21 +134,78 @@ void iMouseWheel(int dir, int x, int y);
 
 #endif
 
+void iInitGlut()
+{
+    if (!glutGet(GLUT_INIT_STATE))
+    {
+        int n = 1;
+        char *p[1];
+        p[0] = (char *)malloc(8);
+        glutInit(&n, p);
+    }
+}
+
+void (*iAnimFunction[MAX_TIMERS])() = {0};
+void (*iAnimAdvancedFunction[MAX_TIMERS])(int) = {0};
+int iAnimCount = 0;
+int iAnimDelays[MAX_TIMERS];
+int iAnimPause[MAX_TIMERS];
+int isAdvanceTimer[MAX_TIMERS] = {0};
+int iAnimLastCallTime[MAX_TIMERS] = {0};
+
+static bool needsRedraw = false;
+
+void markDirty() { needsRedraw = true; }
+
 void timerCallback(int index)
 {
     if (!iAnimPause[index] && iAnimFunction[index])
     {
-        // int currentTime = glutGet(GLUT_ELAPSED_TIME);             // milliseconds since start
-        // int deltaTime = (currentTime - iAnimLastCallTime[index]); // in seconds
-        // iAnimLastCallTime[index] = currentTime;
-        iAnimFunction[index]();
+        int deltaTime = 0;
+        int currentTime = glutGet(GLUT_ELAPSED_TIME); // milliseconds since start
+        if (iAnimLastCallTime[index] == 0)
+        {
+        }
+        else
+        {
+            deltaTime = (currentTime - iAnimLastCallTime[index]); // in seconds
+        }
+        if (isAdvanceTimer[index])
+        {
+            iAnimAdvancedFunction[index](deltaTime);
+        }
+        else
+        {
+            iAnimFunction[index]();
+        }
+        markDirty();
+        iAnimLastCallTime[index] = glutGet(GLUT_ELAPSED_TIME);
     }
-
     glutTimerFunc(iAnimDelays[index], timerCallback, index);
 }
 
-int iSetTimer(int msec, void (*f)(void))
+int iSetAdvancedTimer(int msec, void (*f)(int))
 {
+    iInitGlut();
+    if (iAnimCount >= MAX_TIMERS)
+    {
+        printf("Error: Maximum number of timers reached.\n");
+        return -1;
+    }
+
+    int index = iAnimCount++;
+    iAnimAdvancedFunction[index] = f;
+    iAnimDelays[index] = msec;
+    iAnimPause[index] = 0;
+    isAdvanceTimer[index] = 1;
+
+    glutTimerFunc(msec, timerCallback, index);
+    return index;
+}
+
+int iSetTimer(int msec, void (*f)())
+{
+    iInitGlut();
     if (iAnimCount >= 10)
     {
         printf("Error: Maximum number of timers reached.\n");
@@ -225,14 +309,75 @@ bool iLoadTexture(Image *img)
     return true;
 }
 
-// Additional functions for displaying images
-bool iLoadImage(Image *img, const char filename[], int ignoreColor = -1)
+bool iLoadSVG(Image *img, const char *filepath, double scale = 1.0)
 {
+    // Load SVG
+    NSVGimage *image = nsvgParseFromFile(filepath, "px", 96.0f);
+    if (!image)
+    {
+        fprintf(stderr, "Could not open SVG file: %s\n", filepath);
+        return false;
+    }
+
+    int origW = (int)image->width;
+    int origH = (int)image->height;
+
+    int outW = (int)(origW * scale);
+    int outH = (int)(origH * scale);
+
+    // printf("SVG image size: %d x %d, scaled to: %d x %d\n", origW, origH, outW, outH);
+
+    img->data = (unsigned char *)malloc(outW * outH * 4);
+    if (!img->data)
+    {
+        fprintf(stderr, "Failed to allocate image buffer\n");
+        nsvgDelete(image);
+        return false;
+    }
+
+    NSVGrasterizer *rast = nsvgCreateRasterizer();
+    if (!rast)
+    {
+        fprintf(stderr, "Failed to create rasterizer\n");
+        free(img->data);
+        nsvgDelete(image);
+        return false;
+    }
+
+    nsvgRasterize(rast, image, 0, 0, scale, img->data, outW, outH, outW * 4);
+
+    img->width = outW;
+    img->height = outH;
+    img->channels = 4; // RGBA
+    img->isSVG = true; // Mark as SVG image
+    img->textureId = 0;
+
+    nsvgDeleteRasterizer(rast);
+    nsvgDelete(image);
+
+    return true;
+}
+
+// Additional functions for displaying images
+bool iLoadImage2(Image *img, const char filename[], int ignoreColor = -1)
+{
+    // Check if the image is svg based on extension
+    const char *ext = strrchr(filename, '.');
+
     stbi_set_flip_vertically_on_load(true);
-    img->data = stbi_load(filename, &img->width, &img->height, &img->channels, 0);
+    if (ext && (strcmp(ext, ".svg") == 0 || strcmp(ext, ".SVG") == 0))
+    {
+        iLoadSVG(img, filename);
+    }
+    else
+    {
+        img->data = stbi_load(filename, &img->width, &img->height, &img->channels, 0);
+        img->isSVG = false; // Mark as non-SVG image
+    }
+
     if (img->data == nullptr)
     {
-        printf("Failed to load image: %s\n", stbi_failure_reason());
+        printf("ERROR: Failed to load image: %s\n", stbi_failure_reason());
         return false;
     }
 
@@ -240,6 +385,11 @@ bool iLoadImage(Image *img, const char filename[], int ignoreColor = -1)
     iIgnorePixels(img, ignoreColor);
     img->textureId = 0; // Initialize texture ID to 0
     return true;
+}
+
+int iLoadImage(Image *img, const char filename[])
+{
+    return iLoadImage2(img, filename, -1);
 }
 
 void iFreeTexture(Image *img)
@@ -253,7 +403,25 @@ void iFreeTexture(Image *img)
 void iFreeImage(Image *img)
 {
     iFreeTexture(img);
-    stbi_image_free(img->data);
+    if (img->data)
+    {
+        stbi_image_free(img->data);
+        img->data = nullptr;
+    }
+}
+
+void iFreeFrameSet(FrameSet *fs)
+{
+    if (fs->frames)
+    {
+        for (int i = 0; i < fs->count; ++i)
+        {
+            iFreeImage(&fs->frames[i]);
+        }
+        delete[] fs->frames;
+        fs->frames = nullptr;
+    }
+    fs->count = 0;
 }
 
 void iLine(double x1, double y1, double x2, double y2)
@@ -308,10 +476,15 @@ void iShowTexture2(int x, int y, Image *img, int width = -1, int height = -1, Mi
 
     // Handle mirror states
     if (mirror == HORIZONTAL || mirror == MIRROR_BOTH)
-        swap(tx1, tx2);
+        sswap(tx1, tx2);
     if (mirror == VERTICAL || mirror == MIRROR_BOTH)
-        swap(ty1, ty2);
+        sswap(ty1, ty2);
 
+    if (img->isSVG) // If the image is an SVG, we need to flip vertically
+    {
+        // SVG images are typically flipped vertically in OpenGL
+        sswap(ty1, ty2);
+    }
     glTexCoord2f(tx1, ty1);
     glVertex2i(x, y);
     glTexCoord2f(tx2, ty1);
@@ -325,94 +498,173 @@ void iShowTexture2(int x, int y, Image *img, int width = -1, int height = -1, Mi
     glDisable(GL_TEXTURE_2D);
 }
 
-void iShowTexture(int x, int y, const char *filename, int width = -1, int height = -1, MirrorState mirror = NO_MIRROR, int ignoreColor = -1)
-{
-    Image img;
-    if (!iLoadImage(&img, filename, ignoreColor))
-    {
-        return;
-    }
+// void iShowImage3(int x, int y, Image *img)
+// {
+//     int imgWidth = img->width;
+//     int imgHeight = img->height;
+//     int channels = img->channels;
+//     unsigned char *data = img->data;
 
-    iShowTexture2(x, y, &img, width, height, mirror);
-    iFreeImage(&img);
-}
+//     // Get OpenGL viewport size
+//     GLint viewport[4];
+//     glGetIntegerv(GL_VIEWPORT, viewport);
+//     int screenWidth = viewport[2];
+//     int screenHeight = viewport[3];
 
-void iShowImage2(int x, int y, Image *img)
-{
-    int imgWidth = img->width;
-    int imgHeight = img->height;
-    int channels = img->channels;
-    unsigned char *data = img->data;
+//     // Fast path: no clipping needed
+//     if (x >= 0 && y >= 0)
+//     {
+//         glRasterPos2i(x, y);
+//         glDrawPixels(imgWidth, imgHeight,
+//                      (channels == 4) ? GL_RGBA : GL_RGB,
+//                      GL_UNSIGNED_BYTE, data);
+//         return;
+//     }
 
-    // Get OpenGL viewport size
-    GLint viewport[4];
-    glGetIntegerv(GL_VIEWPORT, viewport);
-    int screenWidth = viewport[2];
-    int screenHeight = viewport[3];
+//     // Improved visible region calculation with clamping
+//     int startX = mmax(0, -x);
+//     int startY = mmax(0, -y);
+//     int drawX = mmax(0, x);
+//     int drawY = mmax(0, y);
 
-    // Fast path: no clipping needed
-    if (x >= 0 && y >= 0)
-    {
-        glRasterPos2i(x, y);
-        glDrawPixels(imgWidth, imgHeight,
-                     (channels == 4) ? GL_RGBA : GL_RGB,
-                     GL_UNSIGNED_BYTE, data);
-        return;
-    }
+//     int drawWidth = mmin(imgWidth - startX, screenWidth - drawX);
+//     int drawHeight = mmin(imgHeight - startY, screenHeight - drawY);
 
-    // Improved visible region calculation with clamping
-    int startX = max(0, -x);
-    int startY = max(0, -y);
-    int drawX = max(0, x);
-    int drawY = max(0, y);
+//     // Don't draw if completely out of bounds
+//     if (drawWidth <= 0 || drawHeight <= 0)
+//         return;
 
-    int drawWidth = min(imgWidth - startX, screenWidth - drawX);
-    int drawHeight = min(imgHeight - startY, screenHeight - drawY);
+//     // Create a buffer for the clipped image
+//     unsigned char *clippedData = new unsigned char[drawWidth * drawHeight * channels];
+//     int srcStride = imgWidth * channels;
+//     int dstStride = drawWidth * channels;
 
-    // Don't draw if completely out of bounds
-    if (drawWidth <= 0 || drawHeight <= 0)
-        return;
+//     unsigned char *dstPtr = clippedData;
+//     unsigned char *srcPtr = data + startY * srcStride + startX * channels;
 
-    // Create a buffer for the clipped image
-    unsigned char *clippedData = new unsigned char[drawWidth * drawHeight * channels];
-    int srcStride = imgWidth * channels;
-    int dstStride = drawWidth * channels;
+//     for (int dy = 0; dy < drawHeight; dy++)
+//     {
+//         memcpy(dstPtr, srcPtr, dstStride);
+//         dstPtr += dstStride;
+//         srcPtr += srcStride;
+//     }
 
-    unsigned char *dstPtr = clippedData;
-    unsigned char *srcPtr = data + startY * srcStride + startX * channels;
+//     glRasterPos2i(drawX, drawY);
+//     glDrawPixels(drawWidth, drawHeight, (channels == 4) ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, clippedData);
+//     delete[] clippedData;
+// }
 
-    for (int dy = 0; dy < drawHeight; dy++)
-    {
-        memcpy(dstPtr, srcPtr, dstStride);
-        dstPtr += dstStride;
-        srcPtr += srcStride;
-    }
-
-    glRasterPos2i(drawX, drawY);
-    glDrawPixels(drawWidth, drawHeight, (channels == 4) ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, clippedData);
-    delete[] clippedData;
-}
-
-void iShowLoadedTexture(int x, int y, Image *img, int width = -1, int height = -1, MirrorState mirror = NO_MIRROR)
+void iShowLoadedImage2(int x, int y, Image *img, int width = -1, int height = -1, MirrorState mirror = NO_MIRROR)
 {
     iShowTexture2(x, y, img, width, height, mirror);
 }
 
-void iShowLoadedImage(int x, int y, Image *img, int width = -1, int height = -1, MirrorState mirror = NO_MIRROR)
+void iShowLoadedImage(int x, int y, Image *img)
 {
-    iShowTexture2(x, y, img, width, height, mirror);
+    iShowLoadedImage2(x, y, img);
 }
 
-void iShowImage(int x, int y, const char *filename, int width = -1, int height = -1, MirrorState mirror = NO_MIRROR, int ignoreColor = -1)
+struct CacheEntry
 {
-    Image img;
-    if (!iLoadImage(&img, filename, ignoreColor))
+    Image image;
+    std::list<std::string>::iterator listIt;
+};
+static std::unordered_map<std::string, CacheEntry> imageCache;
+static std::list<std::string> lruList; // Most recently used at front
+static const size_t MAX_CACHE_SIZE = 500;
+
+void iShowImage2(int x, int y, const char *filename, int ignoreColor = -1)
+{
+    std::string key = std::string(filename);
+
+    auto it = imageCache.find(key);
+    if (it != imageCache.end())
     {
-        printf("Failed to load image: %s\n", filename);
+        // Move to front of LRU list (most recently used)
+        lruList.erase(it->second.listIt);
+        lruList.push_front(key);
+        it->second.listIt = lruList.begin();
+
+        // Use cached image
+        iShowTexture2(x, y, &it->second.image, -1, -1, NO_MIRROR);
         return;
     }
-    iShowTexture2(x, y, &img, width, height, mirror);
+
+    Image img;
+    // printf("Loading image: %s\n", filename);
+    if (!iLoadImage2(&img, filename, ignoreColor))
+    {
+        printf("ERROR: Failed to load image: %s\n", filename);
+        return;
+    }
+
+    // Add to cache (with size limit)
+    if (imageCache.size() >= MAX_CACHE_SIZE)
+    {
+        std::string lru = lruList.back();
+        lruList.pop_back();
+
+        auto lruIt = imageCache.find(lru);
+        if (lruIt != imageCache.end())
+        {
+            iFreeImage(&lruIt->second.image);
+            imageCache.erase(lruIt);
+        }
+    }
+
+    lruList.push_front(key);
+    CacheEntry entry;
+    entry.listIt = lruList.begin();
+    entry.image = img;
+    imageCache[key] = entry;
+
+    iShowTexture2(x, y, &img, -1, -1, NO_MIRROR);
+}
+
+void iShowImage(int x, int y, const char *filename)
+{
+    iShowImage2(x, y, filename);
+}
+
+void iShowSVG2(double x, double y, const char *filepath, double scale = 1.0, MirrorState mirror = NO_MIRROR)
+{
+    // Load SVG
+    Image img;
+    if (!iLoadSVG(&img, filepath, scale))
+    {
+        printf("ERROR: Failed to load svg: %s\n", filepath);
+        return;
+    }
+    iShowTexture2(x, y, &img, img.width, img.height, mirror);
     iFreeImage(&img);
+}
+
+void iShowSVG(double x, double y, const char *filepath)
+{
+    iShowSVG2(x, y, filepath);
+}
+
+void iShowLoadedSVG2(double x, double y, Image *img, MirrorState mirror = NO_MIRROR)
+{
+    // Ensure the image is an SVG
+    if (!img->isSVG)
+    {
+        fprintf(stderr, "Image is not an SVG.\n");
+        return;
+    }
+
+    // Load the SVG texture if not already loaded
+    if (img->textureId == 0)
+    {
+        iLoadTexture(img);
+    }
+
+    iShowTexture2(x, y, img, img->width, img->height, mirror);
+}
+
+void iShowLoadedSVG(double x, double y, Image *img)
+{
+    iShowLoadedSVG2(x, y, img);
 }
 
 void iWrapImage(Image *img, int dx = 0, int dy = 0)
@@ -457,7 +709,17 @@ void iResizeImage(Image *img, int width, int height)
     int channels = img->channels;
     unsigned char *data = img->data;
     unsigned char *resizedData = new unsigned char[width * height * channels];
-    stbir_resize_uint8(data, imgWidth, imgHeight, 0, resizedData, width, height, 0, channels);
+    stbir_pixel_layout layout;
+    if (channels == 3)
+        layout = STBIR_RGB;
+    else if (channels == 4)
+        layout = STBIR_RGBA;
+    else
+    {
+        // handle error
+    }
+    stbir_resize_uint8_srgb(data, imgWidth, imgHeight, 0, resizedData, width, height, 0, layout);
+    // stbir_resize_uint8(data, imgWidth, imgHeight, 0, resizedData, width, height, 0, channels);
     stbi_image_free(data);
     img->data = resizedData;
     img->width = width;
@@ -478,10 +740,20 @@ void iScaleImage(Image *img, double scale)
     unsigned char *data = img->data;
     unsigned char *resizedData = new unsigned char[newWidth * newHeight * channels];
 
-    stbir_resize_uint8(
-        data, img->width, img->height, 0,
-        resizedData, newWidth, newHeight, 0,
-        channels);
+    stbir_pixel_layout layout;
+    if (channels == 3)
+        layout = STBIR_RGB;
+    else if (channels == 4)
+        layout = STBIR_RGBA;
+    else
+    {
+        // handle error
+    }
+    stbir_resize_uint8_srgb(data, img->width, img->height, 0, resizedData, newWidth, newHeight, 0, layout);
+    // stbir_resize_uint8(
+    //     data, img->width, img->height, 0,
+    //     resizedData, newWidth, newHeight, 0,
+    //     channels);
 
     stbi_image_free(data);
     img->data = resizedData;
@@ -538,11 +810,11 @@ void iMirrorImage(Image *img, MirrorState state)
 // ignorecolor = hex color code 0xRRGGBB
 void iUpdateCollisionMask(Sprite *s)
 {
-    if (!s || !s->frames)
+    if (!s || !s->frameSet.frames)
     {
         return;
     }
-    Image *frame = &s->frames[s->currentFrame];
+    Image *frame = &s->frameSet.frames[s->currentFrame];
     int width = frame->width;
     int height = frame->height;
     int channels = frame->channels;
@@ -568,14 +840,115 @@ void iUpdateCollisionMask(Sprite *s)
     s->collisionMask = collisionMask;
 }
 
+int iCheckImageSpriteCollision(int x1, int y1, Image *img, Sprite *s)
+{
+    if (!img || !s || !s->frameSet.frames || s->currentFrame < 0 || s->currentFrame >= s->frameSet.count)
+        return 0; // Invalid image or sprite
+
+    Image *frame = &s->frameSet.frames[s->currentFrame];
+    int x2 = s->x;
+    int y2 = s->y;
+
+    // Calculate bounding box overlap
+    int overlapMinX = mmax(x1, x2);
+    int overlapMaxX = mmin(x1 + img->width, x2 + frame->width);
+    int overlapMinY = mmax(y1, y2);
+    int overlapMaxY = mmin(y1 + img->height, y2 + frame->height);
+
+    if (overlapMinX >= overlapMaxX || overlapMinY >= overlapMaxY)
+        return 0; // No overlap
+
+    int count = 0;
+    // Check pixel-perfect collision in the overlapping area
+    for (int y = overlapMinY; y < overlapMaxY; y++)
+    {
+        for (int x = overlapMinX; x < overlapMaxX; x++)
+        {
+            // Get pixel coordinates in both images
+            int localX1 = x - x1;
+            int localY1 = y - y1;
+            int localX2 = x - x2;
+            int localY2 = y - y2;
+
+            if (localX1 < 0 || localY1 < 0 || localX1 >= img->width || localY1 >= img->height ||
+                localX2 < 0 || localY2 < 0 || localX2 >= frame->width || localY2 >= frame->height)
+                continue;
+
+            unsigned char *pixel1 = &img->data[(localY1 * img->width + localX1) * img->channels];
+            unsigned char *pixel2 = &frame->data[(localY2 * frame->width + localX2) * frame->channels];
+
+            // Check if both pixels are not transparent
+            bool isPixel1Transparent = (img->channels == 4 && pixel1[3] == 0);
+            bool isPixel2Transparent = (frame->channels == 4 && pixel2[3] == 0);
+
+            if (!isPixel1Transparent && !isPixel2Transparent)
+            {
+                // Both pixels are opaque, collision detected
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
+int iCheckImageCollision(int x1, int y1, Image *img1, int x2, int y2, Image *img2)
+{
+    if (!img1 || !img2 || !img1->data || !img2->data)
+        return 0; // Invalid images
+
+    int w1 = img1->width, h1 = img1->height;
+    int w2 = img2->width, h2 = img2->height;
+
+    // Calculate bounding box overlap
+    int overlapMinX = mmax(x1, x2);
+    int overlapMaxX = mmin(x1 + w1, x2 + w2);
+    int overlapMinY = mmax(y1, y2);
+    int overlapMaxY = mmin(y1 + h1, y2 + h2);
+
+    if (overlapMinX >= overlapMaxX || overlapMinY >= overlapMaxY)
+        return 0; // No overlap
+
+    int count = 0;
+    // Check pixel-perfect collision in the overlapping area
+    for (int y = overlapMinY; y < overlapMaxY; y++)
+    {
+        for (int x = overlapMinX; x < overlapMaxX; x++)
+        {
+            // Get pixel coordinates in both images
+            int localX1 = x - x1;
+            int localY1 = y - y1;
+            int localX2 = x - x2;
+            int localY2 = y - y2;
+
+            if (localX1 < 0 || localY1 < 0 || localX1 >= w1 || localY1 >= h1 ||
+                localX2 < 0 || localY2 < 0 || localX2 >= w2 || localY2 >= h2)
+                continue;
+
+            unsigned char *pixel1 = &img1->data[(localY1 * w1 + localX1) * img1->channels];
+            unsigned char *pixel2 = &img2->data[(localY2 * w2 + localX2) * img2->channels];
+
+            // Check if both pixels are not transparent
+            bool isPixel1Transparent = (img1->channels == 4 && pixel1[3] == 0);
+            bool isPixel2Transparent = (img2->channels == 4 && pixel2[3] == 0);
+
+            if (!isPixel1Transparent && !isPixel2Transparent)
+            {
+                // Both pixels are opaque, collision detected
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
 int iCheckCollision(Sprite *s1, Sprite *s2)
 {
     // Early exit if invalid sprites or missing frames/masks
-    if (!s1 || !s2 || !s1->frames || !s2->frames || !s1->collisionMask || !s2->collisionMask)
+    if (!s1 || !s2 || !s1->frameSet.frames || !s2->frameSet.frames || !s1->collisionMask || !s2->collisionMask)
         return 0;
 
-    Image *frame1 = &s1->frames[s1->currentFrame];
-    Image *frame2 = &s2->frames[s2->currentFrame];
+    Image *frame1 = &s1->frameSet.frames[s1->currentFrame];
+    Image *frame2 = &s2->frameSet.frames[s2->currentFrame];
     int w1 = frame1->width, h1 = frame1->height;
     int w2 = frame2->width, h2 = frame2->height;
 
@@ -647,6 +1020,7 @@ int iCheckCollision(Sprite *s1, Sprite *s2)
     float invCos1 = cos1, invSin1 = -sin1; // cos(-θ) = cos(θ), sin(-θ) = -sin(θ)
     float invCos2 = cos2, invSin2 = -sin2;
 
+    int count = 0; // Count of overlapping pixels
     // Pixel-perfect check in overlap region
     for (int y = overlapMinY; y <= overlapMaxY; y++)
     {
@@ -680,13 +1054,19 @@ int iCheckCollision(Sprite *s1, Sprite *s2)
                 int idx1 = iy1 * w1 + ix1;
                 int idx2 = iy2 * w2 + ix2;
                 if (s1->collisionMask[idx1] && s2->collisionMask[idx2])
-                    return 1; // Collision detected
+                {
+
+                    count++;
+                    // printf("Collision at pixel (%d, %d)\n", x, y);
+                    // If you want to return immediately on first collision, uncomment the next line
+                    // return 1;
+                }
             }
         }
     }
-
-    return 0; // No collision found
+    return count;
 }
+
 void iRotateSprite(Sprite *s, double x, double y, double degree)
 {
     if (!s)
@@ -760,10 +1140,10 @@ void iRotateSprite(Sprite *s, double x, double y, double degree)
 
 void iAnimateSprite(Sprite *sprite)
 {
-    if (!sprite || sprite->totalFrames <= 1 || !sprite->frames)
+    if (!sprite || sprite->frameSet.count <= 1 || !sprite->frameSet.frames)
         return;
 
-    sprite->currentFrame = (sprite->currentFrame + 1) % sprite->totalFrames;
+    sprite->currentFrame = (sprite->currentFrame + 1) % sprite->frameSet.count;
     iUpdateCollisionMask(sprite);
 }
 
@@ -791,18 +1171,19 @@ void iAllocateTexture(Image *img)
     img->textureId = texId;
 }
 
-void iLoadFramesFromSheet(Image *frames, const char *filename, int rows, int cols, int ignoreColor = -1)
+int iLoadFramesFromSheet2(FrameSet *frameSet, const char *filename, int rows, int cols, int ignoreColor = -1)
 {
     // Load the sprite sheet image
     Image tmp;
-    iLoadImage(&tmp, filename, ignoreColor);
+    iLoadImage2(&tmp, filename, ignoreColor);
 
     int frameWidth = tmp.width / cols;
     int frameHeight = tmp.height / rows;
     int totalFrames = cols * rows;
 
     // Allocate memory for the individual frames
-    // frames = new Image[totalFrames];
+    frameSet->frames = (Image *)malloc(sizeof(Image) * totalFrames);
+    frameSet->count = totalFrames;
 
     // Loop to extract each frame
     for (int i = 0; i < totalFrames; ++i)
@@ -811,11 +1192,13 @@ void iLoadFramesFromSheet(Image *frames, const char *filename, int rows, int col
         int row = i / cols;
 
         // Create an Image structure for each frame
-        Image *frame = &frames[i];
+        Image *frame = &frameSet->frames[i];
+        frame->textureId = 0; // Initialize texture ID
         frame->width = frameWidth;
         frame->height = frameHeight;
         frame->channels = tmp.channels;
         frame->data = new unsigned char[frameWidth * frameHeight * frame->channels];
+        frame->isSVG = false; // Assuming frames are not SVGs
 
         for (int y = 0; y < frameHeight; ++y)
         {
@@ -837,18 +1220,24 @@ void iLoadFramesFromSheet(Image *frames, const char *filename, int rows, int col
     }
 
     delete[] tmp.data;
+    return totalFrames;
+}
+
+int iLoadFramesFromSheet(FrameSet *frameSet, const char *filename, int rows, int cols)
+{
+    return iLoadFramesFromSheet2(frameSet, filename, rows, cols);
 }
 
 #define MAX_FILES 1024
 #define MAX_FILENAME_LEN 512
 
-void iLoadFramesFromFolder(Image *frames, const char *folderPath, int ignoreColor = -1)
+int iLoadFramesFromFolder2(FrameSet *frameSet, const char *folderPath, int ignoreColor = -1)
 {
     DIR *dir = opendir(folderPath);
     if (dir == nullptr)
     {
-        fprintf(stderr, "Failed to open directory: %s\n", folderPath);
-        return;
+        fprintf(stderr, "ERROR: Failed to open directory: %s\n", folderPath);
+        return -1;
     }
 
     char *filenames[MAX_FILES];
@@ -880,14 +1269,29 @@ void iLoadFramesFromFolder(Image *frames, const char *folderPath, int ignoreColo
 
     qsort(filenames, count, sizeof(char *), compareFilenames);
 
+    frameSet->frames = (Image *)malloc(sizeof(Image) * count);
+    frameSet->count = count;
+    if (frameSet->frames == NULL)
+    {
+        fprintf(stderr, "ERROR: Memory allocation failed\n");
+        for (int i = 0; i < count; ++i)
+            free(filenames[i]);
+        return -1;
+    }
     // Load images in sorted order
     for (int i = 0; i < count; ++i)
     {
         char fullPath[MAX_FILENAME_LEN];
         snprintf(fullPath, sizeof(fullPath), "%s/%s", folderPath, filenames[i]);
-        iLoadImage(&frames[i], fullPath, ignoreColor);
+        iLoadImage2(&frameSet->frames[i], fullPath, ignoreColor);
         free(filenames[i]); // free allocated memory
     }
+    return count; // Return the number of frames loaded
+}
+
+int iLoadFramesFromFolder(FrameSet *frameSet, const char *folderPath)
+{
+    return iLoadFramesFromFolder2(frameSet, folderPath);
 }
 
 void iInitSprite(Sprite *s)
@@ -900,8 +1304,6 @@ void iInitSprite(Sprite *s)
 
     // Assign the pre-loaded frames to the sprite
     s->currentFrame = -1;
-    s->frames = nullptr;       // Directly assign frames
-    s->totalFrames = -1;       // Set the number of frames
     s->scale = 1.0f;           // Initialize scale
     s->flipHorizontal = false; // Initialize flip state
     s->flipVertical = false;   // Initialize flip state
@@ -916,14 +1318,15 @@ void deepCopyImage(Image src, Image *dst)
     dst->width = src.width;
     dst->height = src.height;
     dst->channels = src.channels;
-    dst->textureId = 0; // Copy texture ID
+    dst->isSVG = src.isSVG; // Copy SVG flag
+    dst->textureId = 0;     // Copy texture ID
 
     // Allocate memory for the image data in the destination
     dst->data = (unsigned char *)malloc(src.width * src.height * src.channels);
     if (dst->data == NULL)
     {
         // Handle memory allocation failure
-        printf("Memory allocation failed\n");
+        printf("ERROR: Memory allocation failed\n");
         return;
     }
 
@@ -938,42 +1341,63 @@ void iScaleSprite(Sprite *s, double scale)
         return;
 
     s->scale *= scale;
-    for (int i = 0; i < s->totalFrames; ++i)
+    for (int i = 0; i < s->frameSet.count; ++i)
     {
-        Image *frame = &s->frames[i];
+        Image *frame = &s->frameSet.frames[i];
         iScaleImage(frame, scale);
     }
 
     iUpdateCollisionMask(s);
 }
 
-void iChangeSpriteFrames(Sprite *s, const Image *frames, int totalFrames)
+int iGetVisiblePixelsCount(Sprite *s)
 {
-    if (s->frames != nullptr)
+    // Use sprite collision mask to count visible pixels
+    if (!s || !s->collisionMask || !s->frameSet.frames)
+        return 0;
+
+    Image *frame = &s->frameSet.frames[s->currentFrame];
+    int width = frame->width;
+    int height = frame->height;
+    int visibleCount = 0;
+    for (int y = 0; y < height; ++y)
     {
-        for (int i = 0; i < s->totalFrames; ++i)
+        for (int x = 0; x < width; ++x)
         {
-            iFreeImage(&s->frames[i]);
+            int index = y * width + x;
+            if (s->collisionMask[index] > 0) // Assuming non-zero means visible
+            {
+                visibleCount++;
+            }
         }
-        delete[] s->frames;
     }
 
-    s->frames = new Image[totalFrames];
+    return visibleCount;
+}
 
-    for (int i = 0; i < totalFrames; ++i)
+void iChangeSpriteFrames(Sprite *s, const FrameSet *frameSet)
+{
+    if (s->frameSet.frames != nullptr)
+    {
+        iFreeFrameSet(&s->frameSet);
+    }
+
+    s->frameSet.frames = new Image[frameSet->count];
+    s->frameSet.count = frameSet->count;
+
+    for (int i = 0; i < frameSet->count; ++i)
     {
         // printf("PASSED %d\n", i);
-        deepCopyImage(frames[i], &s->frames[i]);
+        deepCopyImage(frameSet->frames[i], &s->frameSet.frames[i]);
     }
 
     s->currentFrame = 0;
-    s->totalFrames = totalFrames;
     s->collisionMask = nullptr;
 
     // Apply transformations to each frame
-    for (int i = 0; i < s->totalFrames; ++i)
+    for (int i = 0; i < s->frameSet.count; ++i)
     {
-        Image *frame = &s->frames[i];
+        Image *frame = &s->frameSet.frames[i];
         iScaleImage(frame, s->scale);
         if (s->flipHorizontal)
             iMirrorImage(frame, HORIZONTAL);
@@ -1019,14 +1443,27 @@ void iRotate(double x, double y, double degree)
     glTranslatef(-x, -y, 0.0);
 }
 
+void iScale(double x, double y, double scaleX, double scaleY)
+{
+    glPushMatrix();
+    glTranslatef(x, y, 0.0);
+    glScalef(scaleX, scaleY, 1.0f);
+    glTranslatef(-x, -y, 0.0);
+}
+
 void iUnRotate()
+{
+    glPopMatrix();
+}
+
+void iUnScale()
 {
     glPopMatrix();
 }
 
 void iShowSprite(const Sprite *s)
 {
-    if (!s || !s->frames)
+    if (!s || !s->frameSet.frames || s->frameSet.count == 0 || s->currentFrame < 0)
     {
         return;
     }
@@ -1034,15 +1471,15 @@ void iShowSprite(const Sprite *s)
         s->rotationCenterX,
         s->rotationCenterY,
         s->rotation);
-    iShowTexture2(s->x, s->y, &s->frames[s->currentFrame]);
+    iShowTexture2(s->x, s->y, &s->frameSet.frames[s->currentFrame]);
     iUnRotate();
 }
 
 void iResizeSprite(Sprite *s, int width, int height)
 {
-    for (int i = 0; i < s->totalFrames; ++i)
+    for (int i = 0; i < s->frameSet.count; ++i)
     {
-        Image *frame = &s->frames[i];
+        Image *frame = &s->frameSet.frames[i];
         iResizeImage(frame, width, height);
     }
     iUpdateCollisionMask(s);
@@ -1068,9 +1505,9 @@ void iMirrorSprite(Sprite *s, MirrorState state)
     {
         s->flipVertical = !s->flipVertical;
     }
-    for (int i = 0; i < s->totalFrames; ++i)
+    for (int i = 0; i < s->frameSet.count; ++i)
     {
-        Image *frame = &s->frames[i];
+        Image *frame = &s->frameSet.frames[i];
         iMirrorImage(frame, state);
     }
     iUpdateCollisionMask(s);
@@ -1078,11 +1515,10 @@ void iMirrorSprite(Sprite *s, MirrorState state)
 
 void iFreeSprite(Sprite *s)
 {
-    for (int i = 0; i < s->totalFrames; ++i)
+    if (s->frameSet.frames != nullptr)
     {
-        iFreeImage(&s->frames[i]);
+        iFreeFrameSet(&s->frameSet);
     }
-    delete[] s->frames;
     if (s->collisionMask != nullptr)
     {
         delete[] s->collisionMask;
@@ -1167,27 +1603,6 @@ void iTextAdvanced(double x, double y, const char *str, float scale = 0.3, float
     }
     glLineWidth(width); // Reset line width to default
     glPopMatrix();      // Restore transformation matrix
-}
-
-int frameCount = 0;
-int previousTime = 0;
-int fps = 0;
-
-void iShowSpeed(double x, double y)
-{
-    frameCount++;
-    int currentTime = glutGet(GLUT_ELAPSED_TIME);
-    int timeInterval = currentTime - previousTime;
-    if (timeInterval > 1000)
-    {
-        fps = (frameCount * 1000.0) / timeInterval;
-        previousTime = currentTime;
-        frameCount = 0;
-    }
-
-    char fpsText[20];
-    sprintf(fpsText, "FPS: %d", fps);
-    iText(x, y, fpsText);
 }
 
 void iPoint(double x, double y, int size = 0)
@@ -1342,10 +1757,9 @@ void iDelay(int sec)
 
 void iClear()
 {
-    glClear(GL_COLOR_BUFFER_BIT);
     glMatrixMode(GL_MODELVIEW);
     glClearColor(0, 0, 0, 0);
-    glFlush();
+    glClear(GL_COLOR_BUFFER_BIT);
 }
 
 // int iGetDeltaTime()
@@ -1359,11 +1773,53 @@ void iClear()
 //     old_t = t;
 //     return deltaTime;
 // }
+
 void displayFF(void)
 {
     // iClear();
-    iDraw();
-    glutSwapBuffers();
+    if (iDraw)
+    {
+        iDraw();
+        glutSwapBuffers();
+    }
+}
+
+int frameCount = 0;
+int previousTime = 0, previousFpsTime = 0;
+int fps = 0;
+
+void redraw()
+{
+    if (!programEnded || !isGameMode)
+    {
+        glutPostRedisplay(); // Request a redraw
+    }
+}
+
+void iShowSpeed(double x, double y)
+{
+    int currentTime = glutGet(GLUT_ELAPSED_TIME);
+    frameCount++;
+    if (previousFpsTime == 0)
+    {
+        previousFpsTime = currentTime; // Initialize on first call
+        frameCount = 0;
+    }
+    else
+    {
+        int elapsedFpsTime = currentTime - previousFpsTime;
+
+        if (elapsedFpsTime > 1000)
+        {
+            fps = (frameCount * 1000.0f) / elapsedFpsTime;
+            frameCount = 0;
+            previousFpsTime = currentTime;
+        }
+    }
+
+    char fpsText[20];
+    sprintf(fpsText, "FPS: %d", fps);
+    iText(x, y, fpsText);
 }
 
 void animFF(void)
@@ -1373,86 +1829,201 @@ void animFF(void)
         ifft = 1;
         iClear();
     }
-    glutPostRedisplay();
+    // if (needsRedraw)
+    {
+        redraw();
+        needsRedraw = false;
+    }
 }
+
+/* Keyboard key state. */
+#define GLUT_HOLD 0x0002 // The key is being held down
 
 bool keys[256] = {false};
 
-void keyboardHandler1FF(unsigned char key, int x, int y)
-{
-    iKeyboard(key);
-    keys[key] = true;
-    glutPostRedisplay();
-}
-
-void keyboardHandlerUp1FF(unsigned char key, int x, int y)
-{
-    keys[key] = false;
-    glutPostRedisplay();
-}
-
-bool isKeyPressed(unsigned char key)
+int isKeyPressed(unsigned char key)
 {
     return keys[key];
 }
 
+void keyboardHandler1FF(unsigned char key, int x, int y)
+{
+    if (iKeyPress)
+    {
+        if (isKeyPressed(key))
+        {
+            iKeyPress(key);
+        }
+        else
+        {
+            keys[key] = true;
+            iKeyPress(key);
+        }
+    }
+    else if (iKeyboard) // Deprecated
+    {
+        if (isKeyPressed(key))
+        {
+            iKeyboard(key, GLUT_HOLD); // Call with hold state
+        }
+        else
+        {
+            keys[key] = true; // Mark key as pressed
+            iKeyboard(key, GLUT_DOWN);
+        }
+    }
+    else
+    {
+        // printf("Warning: Keyboard functionality is not enabled.\n");
+        return;
+    }
+    redraw();
+}
+
+void keyboardHandlerUp1FF(unsigned char key, int x, int y)
+{
+    if (iKeyRelease)
+    {
+        keys[key] = false;
+        iKeyRelease(key);
+        redraw();
+    }
+    else if (iKeyboard)
+    {
+        keys[key] = false;
+        iKeyboard(key, GLUT_UP);
+        redraw();
+    }
+    else
+    {
+        // printf("Warning: Keyboard functionality is not enabled.\n");
+        return;
+    }
+}
+
 bool specialKeys[109] = {false};
 
-void keyboardHandler2FF(int key, int x, int y)
-{
-    iSpecialKeyboard(key);
-    specialKeys[key] = true; // Mark special key as pressed
-    glutPostRedisplay();
-}
-
-void keyboardHandlerUp2FF(int key, int x, int y)
-{
-    specialKeys[key] = false; // Mark special key as released
-    glutPostRedisplay();
-}
-
-bool isSpecialKeyPressed(int key)
+int isSpecialKeyPressed(int key)
 {
     return specialKeys[key];
 }
 
+void keyboardHandler2FF(int key, int x, int y)
+{
+    if (iSpecialKeyPress)
+    {
+        if (isSpecialKeyPressed(key))
+        {
+            iSpecialKeyPress(key);
+        }
+        else
+        {
+            specialKeys[key] = true; // Mark special key as pressed
+            iSpecialKeyPress(key);
+        }
+    }
+    else if (iSpecialKeyboard) // Deprecated
+    {
+        if (isSpecialKeyPressed(key))
+        {
+            iSpecialKeyboard(key, GLUT_HOLD); // Call with hold state
+        }
+        else
+        {
+            specialKeys[key] = true; // Mark special key as pressed
+            iSpecialKeyboard(key, GLUT_DOWN);
+        }
+    }
+    else
+    {
+        // printf("Warning: Special keyboard functionality is not enabled.\n");
+        return;
+    }
+    redraw();
+}
+
+void keyboardHandlerUp2FF(int key, int x, int y)
+{
+    if (iSpecialKeyRelease)
+    {
+        specialKeys[key] = false; // Mark special key as released
+        iSpecialKeyRelease(key);
+        redraw();
+    }
+    else if (iSpecialKeyboard)
+    {
+        specialKeys[key] = false; // Mark special key as released
+        iSpecialKeyboard(key, GLUT_UP);
+        redraw();
+    }
+    else
+    {
+        // printf("Warning: Special keyboard functionality is not enabled.\n");
+        return;
+    }
+}
+
 void mouseMoveHandlerFF(int mx, int my)
 {
+    if (!iMouseDrag)
+    {
+        // printf("Warning: Mouse drag functionality is not enabled.\n");
+        return;
+    }
+
     iMouseX = mx;
     iMouseY = iScreenHeight - my;
     iMouseDrag(iMouseX, iMouseY);
-
-    glFlush();
+    redraw();
 }
 
 void mousePassiveMoveHandlerFF(int x, int y)
 {
+    if (!iMouseMove)
+    {
+        // printf("Warning: Mouse move functionality is not enabled.\n");
+        return;
+    }
     iMouseX = x;
     iMouseY = iScreenHeight - y;
     iMouseMove(iMouseX, iMouseY);
-
-    glFlush();
+    redraw();
 }
 
 void mouseHandlerFF(int button, int state, int x, int y)
 {
-    iMouseX = x;
-    iMouseY = iScreenHeight - y;
-
-    iMouse(button, state, iMouseX, iMouseY);
-
-    glFlush();
+    if (iMouseClick)
+    {
+        iMouseX = x;
+        iMouseY = iScreenHeight - y;
+        iMouseClick(button, state, iMouseX, iMouseY);
+    }
+    else if (iMouse)
+    {
+        iMouseX = x;
+        iMouseY = iScreenHeight - y;
+        iMouse(button, state, iMouseX, iMouseY);
+    }
+    else
+    {
+        // printf("Warning: Mouse functionality is not enabled.\n");
+        return;
+    }
+    redraw();
 }
-
-// Added by - Mahir Labib Dihan
 
 void mouseWheelHandlerFF(int button, int dir, int x, int y)
 {
+    if (!iMouseWheel)
+    {
+        // printf("Warning: Mouse wheel functionality is not enabled.\n");
+        return;
+    }
+
     iMouseX = x;
     iMouseY = iScreenHeight - y;
     iMouseWheel(dir, iMouseX, iMouseY);
-
-    glFlush();
+    redraw();
 }
 
 void iSetTransparency(int state)
@@ -1462,11 +2033,55 @@ void iSetTransparency(int state)
 
 void iToggleFullscreen()
 {
-    if (isFullScreen)
-        glutReshapeWindow(iSmallScreenWidth, iSmallScreenHeight);
-    else
+    if (!isGameMode)
+    {
+        if (isFullScreen)
+            // glutReshapeWindow(iSmallScreenWidth, iSmallScreenHeight);
+            glutLeaveFullScreen();
+        else
+            glutFullScreen();
+        isFullScreen = !isFullScreen;
+    }
+}
+
+void iEnterFullscreen()
+{
+    if (isGameMode)
+    {
+        printf("Warning: Cannot toggle fullscreen in game mode.\n");
+        return;
+    }
+
+    if (!isFullScreen)
+    {
         glutFullScreen();
-    isFullScreen = !isFullScreen;
+        isFullScreen = 1;
+        // printf("Entered fullscreen mode.\n");
+    }
+    else
+    {
+        // printf("Warning: Already in fullscreen mode.\n");
+    }
+}
+
+void iLeaveFullscreen()
+{
+    if (isGameMode)
+    {
+        printf("Warning: Cannot toggle fullscreen in game mode.\n");
+        return;
+    }
+
+    if (isFullScreen)
+    {
+        glutLeaveFullScreen();
+        isFullScreen = 0;
+        // printf("Left fullscreen mode.\n");
+    }
+    else
+    {
+        // printf("Already in windowed mode.\n");
+    }
 }
 
 void iSetTransparentColor(int r, int g, int b, double a)
@@ -1480,30 +2095,46 @@ void reshapeFF(int width, int height)
     iScreenHeight = height;
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    // iResize(width, height);
+
+    if (iResize)
+    {
+        iResize(width, height); // Need to define iResize in main file
+    }
+    else
+    {
+        // printf("Note: You can control what happens on window resize.\n");
+    }
     glOrtho(0.0, iScreenWidth, 0.0, iScreenHeight, -1.0, 1.0);
     glViewport(0.0, 0.0, iScreenWidth, iScreenHeight);
-    glutPostRedisplay();
+    redraw();
+
+    // glutReshapeWindow(iSmallScreenWidth, iSmallScreenHeight); // Comment above lines and uncomment this line to disable window resizing. (Credit: Mohammad Kamrul Hasan)
 }
 
-void iInitialize(int width = 500, int height = 500, const char *title = "iGraphics")
+void iHideCursor()
 {
-    iSmallScreenHeight = iScreenHeight = height;
-    iSmallScreenWidth = iScreenWidth = width;
+    glutSetCursor(GLUT_CURSOR_NONE);
+}
 
-    glutSetOption(GLUT_MULTISAMPLE, 8);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA | GLUT_MULTISAMPLE);
-    glEnable(GLUT_MULTISAMPLE);
-    glutInitWindowSize(width, height);
-    glutInitWindowPosition(10, 10);
-    glutCreateWindow(title);
-    glClearColor(0.0, 0.0, 0.0, 0.0);
+void iShowCursor()
+{
+    glutSetCursor(GLUT_CURSOR_INHERIT);
+}
+
+void iInit()
+{
+
+    // Basic OpenGL setup
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
+    // Set up viewport and orthographic projection
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(0.0, width, 0.0, height, -1.0, 1.0);
+    glOrtho(0.0, iScreenWidth, 0.0, iScreenHeight, -1.0, 1.0);
 
     iClear();
 
+    // Register callbacks
     glutDisplayFunc(displayFF);
     glutReshapeFunc(reshapeFF);
     glutKeyboardFunc(keyboardHandler1FF);     // normal
@@ -1515,20 +2146,16 @@ void iInitialize(int width = 500, int height = 500, const char *title = "iGraphi
     glutPassiveMotionFunc(mousePassiveMoveHandlerFF);
     glutMouseWheelFunc(mouseWheelHandlerFF);
     glutIdleFunc(animFF);
-    //
-    // Setup Alpha channel testing.
-    // If alpha value is greater than 0, then those
-    // pixels will be rendered. Otherwise, they would not be rendered
-    //
+
+    // Enable alpha testing
     glAlphaFunc(GL_GREATER, 0.0f);
     glEnable(GL_ALPHA_TEST);
 
+    // Enable smoothing
     glEnable(GL_POINT_SMOOTH);
     glHint(GL_POINT_SMOOTH_HINT, GL_LINEAR);
-
     glEnable(GL_LINE_SMOOTH);
     glHint(GL_LINE_SMOOTH_HINT, GL_LINEAR);
-
     glEnable(GL_POLYGON_SMOOTH);
     glHint(GL_POLYGON_SMOOTH_HINT, GL_LINEAR);
 
@@ -1537,6 +2164,148 @@ void iInitialize(int width = 500, int height = 500, const char *title = "iGraphi
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // critical
+
     // glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+    glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);
+}
+
+void iExitMainLoop()
+{
+    if (isGameMode)
+    {
+        // glutLeaveGameMode();
+        glutLeaveMainLoop();
+    }
+    else
+    {
+        glutLeaveMainLoop();
+    }
+    programEnded = 1;
+}
+
+void iCloseWindow()
+{
+    if (isGameMode)
+    {
+        // glutLeaveGameMode();
+        glutLeaveMainLoop();
+    }
+    else
+    {
+        glutLeaveMainLoop();
+    }
+    programEnded = 1;
+}
+
+#define W649_X_H480 "640x480"
+#define W800_X_H600 "800x600"
+#define W1024_X_H768 "1024x768"
+#define W1280_X_H720 "1280x720"
+#define W1366_X_H768 "1366x768"
+
+void iWindowedMode(int width = 500, int height = 500, const char *title = "iGraphics")
+{
+    iInitGlut();
+
+    iSmallScreenHeight = iScreenHeight = height;
+    iSmallScreenWidth = iScreenWidth = width;
+    iWindowTitle = title;
+
+    glutSetOption(GLUT_MULTISAMPLE, 8);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA | GLUT_MULTISAMPLE);
+    glEnable(GLUT_MULTISAMPLE);
+
+    glutInitWindowSize(iScreenWidth, iScreenHeight);
+    glutInitWindowPosition(10, 10);
+
+    glutCreateWindow(title);
+
+    isGameMode = 0; // Not in game mode
+    iInit();
+}
+
+void iGameMode(const char *gameModeStr = W800_X_H600)
+{
+    // Ensure GLUT was initialized
+    iInitGlut();
+
+    glutSetOption(GLUT_MULTISAMPLE, 8);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA | GLUT_MULTISAMPLE);
+    glEnable(GLUT_MULTISAMPLE);
+
+    if (isGameMode)
+    {
+        printf("ERROR: Game Mode already active.\n");
+        return;
+    }
+
+    // Set the game mode string
+    glutGameModeString(gameModeStr);
+    if (glutGameModeGet(GLUT_GAME_MODE_POSSIBLE))
+    {
+        glutEnterGameMode();
+        isGameMode = 1;
+    }
+    else
+    {
+        printf("ERROR: Game Mode not possible with %s\n", gameModeStr);
+        return; // Game mode not possible
+    }
+
+    iInit();
+    // glutMainLoop();
+}
+void iStartMainLoop()
+{
     glutMainLoop();
+}
+void iOpenWindow(int width = 500, int height = 500, const char *title = "iGraphics", int fullscreen = 0)
+{
+    // Ensure GLUT was initialized
+    iInitGlut();
+
+    iSmallScreenHeight = iScreenHeight = height;
+    iSmallScreenWidth = iScreenWidth = width;
+    iWindowTitle = title;
+
+    glutSetOption(GLUT_MULTISAMPLE, 8);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA | GLUT_MULTISAMPLE);
+    glEnable(GLUT_MULTISAMPLE);
+
+    if (fullscreen)
+    {
+        char gameModeStr[20];
+        sprintf(gameModeStr, "%dx%d", width, height);
+        glutGameModeString(gameModeStr); // Supports: 640×480 800×600 1024×768 1280×720 1366x768
+        if (glutGameModeGet(GLUT_GAME_MODE_POSSIBLE))
+        {
+            isFullScreen = 1;
+            glutEnterGameMode();
+        }
+        else
+        {
+            printf("ERROR: Game Mode not possible with %s\n", gameModeStr);
+            // Fallback to normal window
+            glutInitWindowSize(iScreenWidth, iScreenHeight);
+            glutInitWindowPosition(10, 10);
+
+            glutCreateWindow(title);
+        }
+    }
+    else
+    {
+        glutInitWindowSize(iScreenWidth, iScreenHeight);
+        glutInitWindowPosition(10, 10);
+
+        glutCreateWindow(title);
+    }
+    iInit();
+    glutMainLoop();
+}
+
+void iInitialize(int width = 500, int height = 500, const char *title = "iGraphics")
+{
+    iOpenWindow(width, height, title, 0);
 }
