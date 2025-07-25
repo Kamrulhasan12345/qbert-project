@@ -18,7 +18,6 @@ Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 #define ESC 0x1b
 #define NUM_ENEMIES 1
 
-
 typedef enum {
   STATE_MENU,
   STATE_GAME,
@@ -105,10 +104,9 @@ typedef struct {
 } world_t;
 
 typedef struct {
-  char name [100];
-int score;
-}HighScore;
-
+  char name[100];
+  int score;
+} HighScore;
 
 app_t app_state = STATE_MENU;
 
@@ -126,7 +124,6 @@ enemy_t enemies[NUM_ENEMIES];
 
 HighScore highscores[10];
 
-
 int enemy_step_timer, world_timer;
 
 int dt = 16;
@@ -134,9 +131,9 @@ int dt = 16;
 int width = 800, height = 800;
 int sound_1 = -1, sound_2 = -1, sound_3 = -1;
 
-int numHighScore=0;
-char playername[100]="";
-int inputpos=0;
+int numHighScore = 0;
+char playername[100] = "";
+int inputpos = 0;
 
 double start_x = width / 2.0;
 double start_y = height * 0.9;
@@ -150,7 +147,7 @@ bool pause = false;
 bool hover_start = false, hover_resume = false, hover_setting = false, hover_help = false,
      hover_high = false;
 bool hover_credits = false, hover_exit = false, endgame = false;
-bool entername=false,show_highscore=false;
+bool entername = false, show_highscore = false;
 
 double blocksPos3d[][3] = {{7, 7, 0},
                            {6, 7, 1},
@@ -274,63 +271,62 @@ void iExit() {
   iCloseWindow();
 }
 
-void iLoadHighscore(){
-  FILE * file =fopen("./saves/highscores/names.txt","r");
-  if (file==NULL){
-     numHighScore=0;
+void iLoadHighscore() {
+  FILE *file = fopen("./saves/highscores/names.txt", "r");
+  if (file == NULL) {
+    numHighScore = 0;
     return;
   }
-  numHighScore=0;
-  while (numHighScore<10 && fscanf(file,"%99s %d",highscores[numHighScore].name,&highscores[numHighScore].score)==2)
- {
-  numHighScore++;
-}
+  numHighScore = 0;
+  while (numHighScore < 10 && fscanf(file, "%99s %d", highscores[numHighScore].name,
+                                     &highscores[numHighScore].score) == 2) {
+    numHighScore++;
+  }
   fclose(file);
 }
 
-void iSaveHighscore(){
-  FILE * file = fopen ("./saves/highscores/names.txt","w");
-  if (file==NULL){
+void iSaveHighscore() {
+  FILE *file = fopen("./saves/highscores/names.txt", "w");
+  if (file == NULL) {
     printf("Error!\nCould not save High Score\n");
     return;
   }
-  for (int i=0;i<numHighScore;i++){
-    fprintf(file,"%s %d\n",highscores[i].name,highscores[i].score);
+  for (int i = 0; i < numHighScore; i++) {
+    fprintf(file, "%s %d\n", highscores[i].name, highscores[i].score);
   }
   fclose(file);
 }
 
-void iAddHighScore(const char* name,int score){
-  int insertPos=numHighScore;
-    for (int i=0;i<numHighScore;i++) {
-        if (score>highscores[i].score) {
-            insertPos=i;
-            break;
-        }
+void iAddHighScore(const char *name, int score) {
+  int insertPos = numHighScore;
+  for (int i = 0; i < numHighScore; i++) {
+    if (score > highscores[i].score) {
+      insertPos = i;
+      break;
     }
+  }
 
-    if (insertPos<10) {
-        for (int i=(numHighScore<10?numHighScore: 10-1);i>insertPos;i--) {
-            strcpy(highscores[i].name,highscores[i-1].name);
-            highscores[i].score=highscores[i-1].score;
-        }      
-        strcpy(highscores[insertPos].name,name);
-        highscores[insertPos].score=score;
-        
-        if (numHighScore<10) {
-            numHighScore++;
-        }
-        iSaveHighscore();
+  if (insertPos < 10) {
+    for (int i = (numHighScore < 10 ? numHighScore : 10 - 1); i > insertPos; i--) {
+      strcpy(highscores[i].name, highscores[i - 1].name);
+      highscores[i].score = highscores[i - 1].score;
     }
+    strcpy(highscores[insertPos].name, name);
+    highscores[insertPos].score = score;
+
+    if (numHighScore < 10) {
+      numHighScore++;
+    }
+    iSaveHighscore();
+  }
 }
 
 bool checkHighScore(int score) {
-    if (numHighScore<10) {
-        return true;
-    }
-    return score>highscores[10-1].score;
+  if (numHighScore < 10) {
+    return true;
+  }
+  return score > highscores[10 - 1].score;
 }
-
 
 void iLoadLevel(int level) {
   // load a selective level into global variables
@@ -650,14 +646,11 @@ void iPauseMenu() {
 }
 
 void iGameOver() {
-  if (checkHighScore(player.score)){
-    iSetColor(255,255,0);
-    iTextBold(250,380, "NEW HIGH SCORE!");
+  if (checkHighScore(player.score)) {
+    iSetColor(255, 255, 0);
+    iTextBold(250, 380, "NEW HIGH SCORE!");
   }
-  inputpos=0;
-  memset(playername,0,sizeof(playername));
   endgame = true;
-  iDrawQueue();
   iSetTransparentColor(32, 56, 94, 0.95);
   iFilledRectangle(187, 200, 500, 500);
   iShowLoadedImage(300, 578, &qbert);
@@ -668,14 +661,14 @@ void iGameOver() {
   char score[50];
   snprintf(score, 50, "%d", player.score);
   iTextBold(380, 440, score);
-  iSetColor(255,255,0);
+  iSetColor(255, 255, 0);
   iTextBold(250, 350, "Enter your name:");
-  iSetColor(255,255,255);
-  iRectangle(250,320,200,25);
+  iSetColor(255, 255, 255);
+  iRectangle(250, 320, 200, 25);
   iSetColor(0, 0, 0);
   iFilledRectangle(251, 321, 198, 23);
-  iSetColor(255,255,0);
-  //iText(255,325,playername, GLUT_BITMAP_HELVETICA_18);
+  iSetColor(255, 255, 0);
+  iText(255, 325, playername, GLUT_BITMAP_HELVETICA_18);
   iTextBold(360, 290, "Press ENTER to save");
 }
 
@@ -1160,9 +1153,9 @@ void iDraw() {
       iPauseMenu();
       return;
     }
-    if (endgame){
-  iSetColor(255,0,0);
-  iText(200,325,playername, GLUT_BITMAP_HELVETICA_18);
+    if (endgame) {
+      iSetColor(255, 0, 0);
+      iText(200, 325, playername, GLUT_BITMAP_HELVETICA_18);
     }
   }
 
@@ -1357,31 +1350,28 @@ void iKeyPress(unsigned char key) {
     default:
       break;
     }
-  } 
-  
-  else if (app_state == STATE_GAME && endgame){
-    switch (key){
-      case '\r':
-       if (strlen(playername)>0){
-        iAddHighScore(playername,player.score);
-        app_state=STATE_MENU;
-        endgame=false;
+  } else if (app_state == STATE_GAME && endgame) {
+    switch (key) {
+    case '\r':
+      if (strlen(playername) > 0) {
+        iAddHighScore(playername, player.score);
+        memset(playername, 0, sizeof(playername));
+        inputpos = 0;
+        app_state = STATE_MENU;
       }
-        break;
-      case '\b':
-         if (inputpos>0){
-         inputpos--;
-         playername[inputpos]='\0';
+      break;
+    case '\b':
+      if (inputpos > 0) {
+        inputpos--;
+        playername[inputpos] = '\0';
       }
-         break;
-      default:
-      playername[inputpos]=key;
+      break;
+    default:
+      playername[inputpos] = key;
       inputpos++;
-      playername[inputpos]='\0';
-      
+      playername[inputpos] = '\0';
     }
-  }
-  else {
+  } else {
     switch (key) {
     default:
       break;
