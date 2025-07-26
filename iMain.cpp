@@ -154,8 +154,9 @@ bool selected_no = false;
 bool pause = false;
 bool hover_start = false, hover_resume = false, hover_setting = false, hover_help = false,
      hover_high = false;
-bool hover_credits = false, hover_exit = false, endgame = false;
+bool hover_credits = false, hover_exit = false, end_game = false;
 bool entername = false, show_highscore = false;
+bool level_completed = false;
 
 double blocksPos3d[][3] = {{7, 7, 0},
                            {6, 7, 1},
@@ -427,7 +428,9 @@ void iLoadLevel(int level) {
 }
 
 void iCompleteLevel() {
-  // load splash screen and then load next level
+  // load levelup/complete game screen and then load next level
+  // Here show next level (will set the level_completed to false afterwards)
+  // or show complete game (will set endgame to true and level_completed to false)
 }
 
 void iClearQueue() {
@@ -736,7 +739,7 @@ void iPauseMenu() {
 }
 
 void iGameOver() {
-  endgame = true;
+  end_game = true;
   iSetTransparentColor(32, 56, 94, 0.95);
   iFilledRectangle(187, 200, 500, 500);
   iShowLoadedImage(300, 578, &qbert);
@@ -1106,6 +1109,8 @@ void iCheckCompletion() {
   if (i >= visible_count) {
     // completed
     printf("level completed!\n");
+    if (!level_completed)
+      level_completed = true;
     // go to next level, or show completion
   }
 }
@@ -1144,7 +1149,7 @@ void iWorldFwd() {
 
 void iGame() {
   app_state = STATE_GAME;
-  endgame = false;
+  end_game = false;
   iBlock();
   iPlayer();
   iEnemy();
@@ -1243,7 +1248,7 @@ void iDraw() {
   else if (app_state == STATE_HELP) {
     iHelp();
   } else if (app_state == STATE_GAME) {
-    if (!endgame) {
+    if (!end_game) {
       iSetColor(255, 255, 255);
       char pos[50];
       snprintf(pos, 50, "%d, %d, %d", (int)player.km.pos.x, (int)player.km.pos.y,
@@ -1263,6 +1268,8 @@ void iDraw() {
       char score[50];
       snprintf(score, 50, "%d", player.score);
       iTextBold(70, 700, score);
+      if (level_completed)
+        iCompleteLevel();
     }
 
     for (int i = 0; i < NUM_ENEMIES; i++) {
@@ -1278,7 +1285,7 @@ void iDraw() {
       iPauseMenu();
       return;
     }
-    if (endgame) {
+    if (end_game) {
       iSetColor(255, 0, 0);
       iText(200, 325, playername, GLUT_BITMAP_HELVETICA_18);
     }
@@ -1458,7 +1465,7 @@ void iKeyPress(unsigned char key) {
     default:
       break;
     }
-  } else if (app_state == STATE_GAME && !endgame) {
+  } else if (app_state == STATE_GAME && !end_game) {
     switch (key) {
     case 'q':
     case ESC:
@@ -1466,7 +1473,7 @@ void iKeyPress(unsigned char key) {
       iQuitGame();
       break;
     case 'r': {
-      if (endgame)
+      if (end_game)
         return;
       player.km.pos.x = 0;
       player.km.pos.y = 0;
@@ -1478,7 +1485,7 @@ void iKeyPress(unsigned char key) {
     default:
       break;
     }
-  } else if (app_state == STATE_GAME && endgame) {
+  } else if (app_state == STATE_GAME && end_game) {
     switch (key) {
     case '\r':
       if (strlen(playername) > 0) {
@@ -1547,7 +1554,7 @@ void iSpecialKeyPress(unsigned char key) {
     if (key == GLUT_KEY_LEFT || key == GLUT_KEY_RIGHT || key == GLUT_KEY_UP ||
         key == GLUT_KEY_DOWN) {
       // handle scores
-      if (endgame)
+      if (end_game)
         return;
       if (player.km.jump.active)
         return;
