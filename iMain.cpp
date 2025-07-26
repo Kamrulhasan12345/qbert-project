@@ -8,7 +8,7 @@
 #include "iSound.h"
 
 Image bg, help, life, qbert, pause_button, pause_text, dialogue, gameover, qbert_up, qbert_down,
-    qbert_right;
+    qbert_right,highscoreimage;
 Image *qbert_looker;
 FrameSet frames, frames_1, spin_frame, ball_frame, qbert_invert;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
@@ -230,6 +230,7 @@ void iLoadResource() {
   iLoadImage(&pause_text, "assets/images/paused.png");
   iLoadImage(&dialogue, "assets/images/dialogue.png");
   iLoadImage(&gameover, "assets/images/gameover.png");
+  iLoadImage(&highscoreimage, "assets/images/highscoreimage.png");
   iResizeImage(&qbert, 35, 40);
   iResizeImage(&qbert_up, 35, 40);
   iResizeImage(&qbert_down, 35, 40);
@@ -278,8 +279,7 @@ void iLoadHighscore() {
     return;
   }
   numHighScore = 0;
-  while (numHighScore < 10 && fscanf(file, "%99s %d", highscores[numHighScore].name,
-                                     &highscores[numHighScore].score) == 2) {
+  while (numHighScore < 10 && fscanf(file, "%99s %d", highscores[numHighScore].name,&highscores[numHighScore].score) == 2) {
     numHighScore++;
   }
   fclose(file);
@@ -307,14 +307,14 @@ void iAddHighScore(const char *name, int score) {
   }
 
   if (insertPos < 10) {
-    for (int i = (numHighScore < 10 ? numHighScore : 10 - 1); i > insertPos; i--) {
-      strcpy(highscores[i].name, highscores[i - 1].name);
-      highscores[i].score = highscores[i - 1].score;
+    for (int i = (numHighScore < 10 ? numHighScore : 10 - 1); i > insertPos;i--) {
+      strcpy(highscores[i].name, highscores[i-1].name);
+      highscores[i].score = highscores[i-1].score;
     }
-    strcpy(highscores[insertPos].name, name);
-    highscores[insertPos].score = score;
+    strcpy(highscores[insertPos].name,name);
+    highscores[insertPos].score=score;
 
-    if (numHighScore < 10) {
+    if (numHighScore<10) {
       numHighScore++;
     }
     iSaveHighscore();
@@ -322,10 +322,10 @@ void iAddHighScore(const char *name, int score) {
 }
 
 bool checkHighScore(int score) {
-  if (numHighScore < 10) {
+  if (numHighScore<10) {
     return true;
   }
-  return score > highscores[10 - 1].score;
+  return score > highscores[9].score;
 }
 
 void iLoadLevel(int level) {
@@ -736,7 +736,36 @@ void iHelp() {
   iFilledCircle(100, 475, 8);
   iFilledCircle(200, 220, 8);
 }
-void iHighscore();
+void iHighscore(){
+  app_state=STATE_HIGHSCORE;
+   iSetColor(32,56,94);
+  iFilledRectangle(0, 0, 800, 800);
+  iShowLoadedImage(240, 507, &highscoreimage);
+  iSetColor(255,255,51);
+  iFilledRectangle(100,550,70,28);
+  iFilledRectangle(320,550,70,28);
+  iFilledRectangle(600,550,70,28);
+  iSetColor(255, 51, 51);
+  iTextBold(115,558,"Rank");
+  iTextBold(335,558,"Name");
+  iTextBold(615,558,"Score");
+  for (int i=numHighScore;i>=0;i--){
+    iSetColor(255, 251, 51);
+     char rank[10];
+     char name[200];
+     char score[50];
+    snprintf(rank, sizeof(rank), "%d.", i + 1);
+    snprintf(name,sizeof(name),"%s",highscores[i].name);
+    snprintf(score,sizeof(score),"%d",highscores[i].score);
+    iTextAdvanced(115, 515 - i * 50, rank,0.2,1.0);
+    iTextAdvanced(320,515-i*50,name,0.2,1.0);
+    iTextAdvanced(605,515-i*50,score,0.2,1.0);
+  }
+  iSetColor(255,255,51);
+  iFilledRectangle(370,40,70,28);
+  iSetColor(255, 51, 51);
+  iTextBold(385,50,"Back");
+}
 void iCredits();
 
 void iBlock() {
@@ -1115,7 +1144,13 @@ void iDraw() {
   } else if (app_state == STATE_SETTING) {
     iSetting();
     iShowSprite(&qbert_spin);
-  } else if (app_state == STATE_HELP) {
+  } 
+   
+  else if(app_state == STATE_HIGHSCORE){
+    iHighscore();
+  }
+
+  else if (app_state == STATE_HELP) {
     iHelp();
   } else if (app_state == STATE_GAME) {
     if (!endgame) {
@@ -1165,6 +1200,7 @@ void iDraw() {
     if (editor.grid)
       iGrid();
   }
+
 }
 /*
 function iMouseMove() is called when the user moves the
@@ -1227,11 +1263,12 @@ void iMouse(int button, int state, int mx, int my) {
         iSetting();
       } else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 305 && my < 335) {
         iHelp();
-      } /*
+      } 
       else if
       (mx>width/2-100&&mx<width/2+50&&my>240&&my<270)
       { iHighscore();
       }
+      /*
       else if
       (mx>width/2-100&&mx<width/2+50&&my>175&&my<205)
       { iCredits();
@@ -1294,6 +1331,11 @@ void iMouse(int button, int state, int mx, int my) {
     }
   } else if (app_state == STATE_HELP) {
     if (mx > 350 && mx < 450 && my > 50 && my < 95) {
+      iMenu();
+    }
+  }
+  else if (app_state == STATE_HIGHSCORE){
+    if (mx>370 && mx<370+70 && my>40 && my<40+28){
       iMenu();
     }
   }
