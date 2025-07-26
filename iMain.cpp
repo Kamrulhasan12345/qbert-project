@@ -8,7 +8,7 @@
 #include "iSound.h"
 
 Image bg, help, life, qbert, pause_button, pause_text, dialogue, gameover, qbert_up, qbert_down,
-    qbert_right;
+    qbert_right, highscoreimage;
 Image *qbert_looker;
 FrameSet frames, frames_1, spin_frame, ball_frame, qbert_invert;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
@@ -111,6 +111,11 @@ world_t world;
 
 world_t gameLevel;
 
+typedef struct {
+  char name[100];
+  int score;
+} HighScore;
+
 app_t app_state = STATE_MENU;
 
 editor_t editor = {.wireframe = false, .grid = false, .debug = false};
@@ -125,12 +130,18 @@ player_t player;
 // world_t
 enemy_t enemies[NUM_ENEMIES];
 
+HighScore highscores[10];
+
 int enemy_step_timer, world_timer;
 
 int dt = 16;
 
 int width = 800, height = 800;
 int sound_1 = -1, sound_2 = -1, sound_3 = -1;
+
+int numHighScore = 0;
+char playername[100] = "";
+int inputpos = 0;
 
 double start_x = width / 2.0;
 double start_y = height * 0.9;
@@ -144,6 +155,7 @@ bool pause = false;
 bool hover_start = false, hover_resume = false, hover_setting = false, hover_help = false,
      hover_high = false;
 bool hover_credits = false, hover_exit = false, endgame = false;
+bool entername = false, show_highscore = false;
 
 double blocksPos3d[][3] = {{7, 7, 0},
                            {6, 7, 1},
@@ -226,6 +238,7 @@ void iLoadResource() {
   iLoadImage(&pause_text, "assets/images/paused.png");
   iLoadImage(&dialogue, "assets/images/dialogue.png");
   iLoadImage(&gameover, "assets/images/gameover.png");
+  iLoadImage(&highscoreimage, "assets/images/highscoreimage.png");
   iResizeImage(&qbert, 35, 40);
   iResizeImage(&qbert_up, 35, 40);
   iResizeImage(&qbert_down, 35, 40);
@@ -265,6 +278,63 @@ void iExit() {
   // free everything
   // close window
   iCloseWindow();
+}
+
+void iLoadHighscore() {
+  FILE *file = fopen("./saves/highscores/names.txt", "r");
+  if (file == NULL) {
+    numHighScore = 0;
+    return;
+  }
+  numHighScore = 0;
+  while (numHighScore < 10 && fscanf(file, "%99s %d", highscores[numHighScore].name,
+                                     &highscores[numHighScore].score) == 2) {
+    numHighScore++;
+  }
+  fclose(file);
+}
+
+void iSaveHighscore() {
+  FILE *file = fopen("./saves/highscores/names.txt", "w");
+  if (file == NULL) {
+    printf("Error!\nCould not save High Score\n");
+    return;
+  }
+  for (int i = 0; i < numHighScore; i++) {
+    fprintf(file, "%s %d\n", highscores[i].name, highscores[i].score);
+  }
+  fclose(file);
+}
+
+void iAddHighScore(const char *name, int score) {
+  int insertPos = numHighScore;
+  for (int i = 0; i < numHighScore; i++) {
+    if (score > highscores[i].score) {
+      insertPos = i;
+      break;
+    }
+  }
+
+  if (insertPos < 10) {
+    for (int i = (numHighScore < 10 ? numHighScore : 10 - 1); i > insertPos; i--) {
+      strcpy(highscores[i].name, highscores[i - 1].name);
+      highscores[i].score = highscores[i - 1].score;
+    }
+    strcpy(highscores[insertPos].name, name);
+    highscores[insertPos].score = score;
+
+    if (numHighScore < 10) {
+      numHighScore++;
+    }
+    iSaveHighscore();
+  }
+}
+
+bool checkHighScore(int score) {
+  if (numHighScore < 10) {
+    return true;
+  }
+  return score > highscores[9].score;
 }
 
 void iLoadLevel(int level) {
@@ -667,7 +737,6 @@ void iPauseMenu() {
 
 void iGameOver() {
   endgame = true;
-  iDrawQueue();
   iSetTransparentColor(32, 56, 94, 0.95);
   iFilledRectangle(187, 200, 500, 500);
   iShowLoadedImage(300, 578, &qbert);
@@ -678,6 +747,19 @@ void iGameOver() {
   char score[50];
   snprintf(score, 50, "%d", player.score);
   iTextBold(380, 440, score);
+  iSetColor(255, 255, 0);
+  if (checkHighScore(player.score)) {
+    iSetColor(247, 233, 30);
+    iTextBold(250, 380, "NEW HIGH SCORE!");
+  }
+  iTextBold(250, 350, "Enter your name:");
+  iSetColor(255, 255, 255);
+  iRectangle(250, 320, 200, 25);
+  iSetColor(0, 0, 0);
+  iFilledRectangle(251, 321, 198, 23);
+  iSetColor(255, 255, 0);
+  iText(255, 325, playername, GLUT_BITMAP_HELVETICA_18);
+  iTextBold(360, 290, "Press ENTER to save");
 }
 
 void iSetting() {
@@ -744,7 +826,36 @@ void iHelp() {
   iFilledCircle(100, 475, 8);
   iFilledCircle(200, 220, 8);
 }
-void iHighscore();
+void iHighscore() {
+  app_state = STATE_HIGHSCORE;
+  iSetColor(32, 56, 94);
+  iFilledRectangle(0, 0, 800, 800);
+  iShowLoadedImage(240, 507, &highscoreimage);
+  iSetColor(255, 255, 51);
+  iFilledRectangle(100, 550, 70, 28);
+  iFilledRectangle(320, 550, 70, 28);
+  iFilledRectangle(600, 550, 70, 28);
+  iSetColor(255, 51, 51);
+  iTextBold(115, 558, "Rank");
+  iTextBold(335, 558, "Name");
+  iTextBold(615, 558, "Score");
+  for (int i = numHighScore; i >= 0; i--) {
+    iSetColor(255, 251, 51);
+    char rank[10];
+    char name[200];
+    char score[50];
+    snprintf(rank, sizeof(rank), "%d.", i + 1);
+    snprintf(name, sizeof(name), "%s", highscores[i].name);
+    snprintf(score, sizeof(score), "%d", highscores[i].score);
+    iTextAdvanced(115, 515 - i * 50, rank, 0.2, 1.0);
+    iTextAdvanced(320, 515 - i * 50, name, 0.2, 1.0);
+    iTextAdvanced(605, 515 - i * 50, score, 0.2, 1.0);
+  }
+  iSetColor(255, 255, 51);
+  iFilledRectangle(370, 40, 70, 28);
+  iSetColor(255, 51, 51);
+  iTextBold(385, 50, "Back");
+}
 void iCredits();
 
 void iBlock() {
@@ -1123,7 +1234,13 @@ void iDraw() {
   } else if (app_state == STATE_SETTING) {
     iSetting();
     iShowSprite(&qbert_spin);
-  } else if (app_state == STATE_HELP) {
+  }
+
+  else if (app_state == STATE_HIGHSCORE) {
+    iHighscore();
+  }
+
+  else if (app_state == STATE_HELP) {
     iHelp();
   } else if (app_state == STATE_GAME) {
     if (!endgame) {
@@ -1160,6 +1277,10 @@ void iDraw() {
     if (pause) {
       iPauseMenu();
       return;
+    }
+    if (endgame) {
+      iSetColor(255, 0, 0);
+      iText(200, 325, playername, GLUT_BITMAP_HELVETICA_18);
     }
   }
 
@@ -1231,11 +1352,10 @@ void iMouse(int button, int state, int mx, int my) {
         iSetting();
       } else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 305 && my < 335) {
         iHelp();
-      } /*
-      else if
-      (mx>width/2-100&&mx<width/2+50&&my>240&&my<270)
-      { iHighscore();
+      } else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 240 && my < 270) {
+        iHighscore();
       }
+      /*
       else if
       (mx>width/2-100&&mx<width/2+50&&my>175&&my<205)
       { iCredits();
@@ -1300,6 +1420,10 @@ void iMouse(int button, int state, int mx, int my) {
     if (mx > 350 && mx < 450 && my > 50 && my < 95) {
       iMenu();
     }
+  } else if (app_state == STATE_HIGHSCORE) {
+    if (mx > 370 && mx < 370 + 70 && my > 40 && my < 40 + 28) {
+      iMenu();
+    }
   }
 }
 
@@ -1334,7 +1458,7 @@ void iKeyPress(unsigned char key) {
     default:
       break;
     }
-  } else if (app_state == STATE_GAME) {
+  } else if (app_state == STATE_GAME && !endgame) {
     switch (key) {
     case 'q':
     case ESC:
@@ -1353,6 +1477,29 @@ void iKeyPress(unsigned char key) {
     }
     default:
       break;
+    }
+  } else if (app_state == STATE_GAME && endgame) {
+    switch (key) {
+    case '\r':
+      if (strlen(playername) > 0) {
+        if (checkHighScore(player.score)) {
+          iAddHighScore(playername, player.score);
+        }
+        memset(playername, 0, sizeof(playername));
+        inputpos = 0;
+        app_state = STATE_MENU;
+      }
+      break;
+    case '\b':
+      if (inputpos > 0) {
+        inputpos--;
+        playername[inputpos] = '\0';
+      }
+      break;
+    default:
+      playername[inputpos] = key;
+      inputpos++;
+      playername[inputpos] = '\0';
     }
   } else {
     switch (key) {
@@ -1424,6 +1571,7 @@ int main(int argc, char *argv[]) {
   iSetTransparency(1);
   iLoadLevel(1);
   iLoadResource();
+  iLoadHighscore();
   printf("%d\n", sizeof(blocksPos3d) / sizeof(blocksPos3d[0]));
   iInitializeSound();
   sound_1 = iPlaySound("assets/sounds/undertale_1.wav", true, 80);
