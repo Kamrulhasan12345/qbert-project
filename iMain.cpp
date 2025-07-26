@@ -646,10 +646,6 @@ void iPauseMenu() {
 }
 
 void iGameOver() {
-  if (checkHighScore(player.score)) {
-    iSetColor(255, 255, 0);
-    iTextBold(250, 380, "NEW HIGH SCORE!");
-  }
   endgame = true;
   iSetTransparentColor(32, 56, 94, 0.95);
   iFilledRectangle(187, 200, 500, 500);
@@ -662,6 +658,10 @@ void iGameOver() {
   snprintf(score, 50, "%d", player.score);
   iTextBold(380, 440, score);
   iSetColor(255, 255, 0);
+  if (checkHighScore(player.score)) {
+    iSetColor(247,233,30);
+    iTextBold(250, 380, "NEW HIGH SCORE!");
+  }
   iTextBold(250, 350, "Enter your name:");
   iSetColor(255, 255, 255);
   iRectangle(250, 320, 200, 25);
@@ -1354,7 +1354,9 @@ void iKeyPress(unsigned char key) {
     switch (key) {
     case '\r':
       if (strlen(playername) > 0) {
+        if (checkHighScore(player.score)){
         iAddHighScore(playername, player.score);
+        }
         memset(playername, 0, sizeof(playername));
         inputpos = 0;
         app_state = STATE_MENU;
