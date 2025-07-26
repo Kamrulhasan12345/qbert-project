@@ -15,6 +15,9 @@ Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 
 #define PI 3.14159265
 #define MAX_SIZE 10
+#define MAX_BLOCKS 128
+#define MAX_ENEMIES 8
+#define MAX_STATES 3
 #define ESC 0x1b
 #define NUM_ENEMIES 1
 
@@ -53,7 +56,7 @@ typedef struct {
 
 // typedef enum { LOOK_LEFT, LOOK_RIGHT, LOOK_UP, LOOK_DOWN } look_t;
 
-typedef enum { ENEMY_COILY, ENEMY_UGG, ENEMY_WRONGWAY, ENEMY_SAM } enemytype_t;
+typedef enum { ENEMY_COILY, ENEMY_UGG, ENEMY_WRONGWAY, ENEMY_SAM, ENEMY_RED } enemytype_t;
 
 typedef struct {
   double x, y, z;
@@ -93,15 +96,20 @@ typedef struct {
 } drawqueue_t;
 
 typedef struct {
-  double *(blocks[3]);
+  double blocks[MAX_BLOCKS][3];
   int blocks_count;
-  double *(visible[3]);
+  double visible[MAX_BLOCKS][3];
   int visible_count;
-  int8_t level_num, state_num;
-  color_t states[3];
+  int8_t level_num, states_count;
+  color_t states[MAX_STATES];
   color_t l_color, r_color;
-  enemy_t *enemies;
+  enemy_t enemies[MAX_ENEMIES];
+  int enemy_count;
 } world_t;
+
+world_t world;
+
+world_t gameLevel;
 
 app_t app_state = STATE_MENU;
 
@@ -194,7 +202,7 @@ color_t l_color = {.r = 86, .g = 169, .b = 152}, r_color = {.r = 49, .g = 70, .b
 
 position_t dirs[4] = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}};
 
-int state_num = 3;
+int states_count = 3;
 
 int n = sizeof(blocksPos3d) / sizeof(blocksPos3d[0]);
 
@@ -260,11 +268,92 @@ void iExit() {
 }
 
 void iLoadLevel(int level) {
-  // load a selective level into global variables
+  world_t gameLevel = {0};
+  position_t player_pos;
+
+  FILE *fp;
+
+  int mode = -1;
+
+  char line[128];
   char filePath[50];
-  snprintf(filePath, 50, "./saves/levels/%d", level);
-  FILE *fp = fopen(filePath, "r");
-  // now scanf for the appropriate file structure
+
+  snprintf(filePath, 50, "./saves/levels/level%d.txt", level);
+  fp = fopen(filePath, "r");
+  if (fp == NULL) {
+    printf("Could not read the %dth level file at %s.\n", level, filePath);
+    return;
+  }
+
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    if (!strncmp(line, "LEVEL", 5)) {
+      sscanf(line, "LEVEL %d", &gameLevel.level_num);
+    } else if (!strncmp(line, "START", 5)) {
+      sscanf(line, "START %d %d %d", &player_pos.x, &player_pos.y, &player_pos.z);
+    } else if (!strncmp(line, "WORLD", 5))
+      mode = 0;
+    else if (!strncmp(line, "ENEMY", 5))
+      mode = 1;
+    else if (!strncmp(line, "STATES", 6))
+      mode = 2;
+    else if (!strncmp(line, "SIDES", 5))
+      mode = 3;
+    else {
+      switch (mode) {
+      case 0: {
+        int x, y, z;
+        if (sscanf(line, "%d %d %d", &x, &y, &z) == 3) {
+          if (gameLevel.blocks_count < MAX_BLOCKS) {
+            gameLevel.blocks[gameLevel.blocks_count][0] = 1. * x,
+            gameLevel.blocks[gameLevel.blocks_count][1] = 1. * y,
+            gameLevel.blocks[gameLevel.blocks_count][2] = 1. * z;
+            gameLevel.blocks_count++;
+          }
+        }
+        break;
+      }
+      case 1: {
+        int enemy_idx;
+        int x, y, z;
+        if (sscanf(line, "%d %d %d %d", &enemy_idx, &x, &y, &z) == 4) {
+          if (gameLevel.enemy_count < MAX_ENEMIES) {
+            gameLevel.enemies[gameLevel.enemy_count++] = {
+                .km = {.jump = {0}, .pos = {.x = x, .y = y, .z = z}, .la = rand() % 4},
+                .type = (enemytype_t)enemy_idx};
+          }
+        }
+        break;
+      }
+      case 2: {
+        int r, g, b;
+        if (sscanf(line, "%d %d %d", &r, &g, &b) == 3) {
+          if (gameLevel.states_count < MAX_STATES) {
+            gameLevel.states[gameLevel.states_count++] = {.r = r, .g = g, .b = b};
+          }
+        }
+        break;
+      }
+      case 3: {
+        sscanf(line, "%d %d %d %d %d %d %d %d", &gameLevel.l_color.r, &gameLevel.l_color.g,
+               &gameLevel.l_color.b, &gameLevel.l_color.a, &gameLevel.r_color.r,
+               &gameLevel.r_color.g, &gameLevel.r_color.b, &gameLevel.r_color.a);
+        break;
+      }
+      default:
+        break;
+      }
+    }
+  }
+  printf("%-20s: %d\n", "level_num", gameLevel.level_num);
+  printf("%-20s: %d\n", "blocks_count", gameLevel.blocks_count);
+  printf("%-20s: %d\n", "enemy_count", gameLevel.enemy_count);
+  printf("%-20s: %d\n", "states_count", gameLevel.states_count);
+  printf("%-20s: {%d, %d, %d, %d}\n", "l_color", gameLevel.l_color.r, gameLevel.l_color.g,
+         gameLevel.l_color.b, gameLevel.l_color.a);
+  printf("%-20s: {%d, %d, %d, %d}\n", "r_color", gameLevel.r_color.r, gameLevel.r_color.g,
+         gameLevel.r_color.b, gameLevel.r_color.a);
+  // copy everything to global world
+  world = gameLevel;
 }
 
 void iCompleteLevel() {
@@ -410,9 +499,9 @@ void iDrawQueue() {
     switch (drawqueue[j].type) {
     case TYPE_BLOCK: {
       if (!editor.wireframe) {
-        iSetColor(states[tiles[(int)y][(int)x][(int)z].state % state_num].r,
-                  states[tiles[(int)y][(int)x][(int)z].state % state_num].g,
-                  states[tiles[(int)y][(int)x][(int)z].state % state_num].b);
+        iSetColor(states[tiles[(int)y][(int)x][(int)z].state % states_count].r,
+                  states[tiles[(int)y][(int)x][(int)z].state % states_count].g,
+                  states[tiles[(int)y][(int)x][(int)z].state % states_count].b);
         iTile(start_x + (z - x) * tile_width * cos(PI / 6),
               start_y - (z + x) * tile_width / 2 - y * tile_height);
         iSide(start_x + (z - x) * tile_width * cos(PI / 6),
@@ -900,7 +989,7 @@ void iCheckCompletion() {
   int i;
   for (i = 0; i < visible_count; i++) {
     int x = visible[i][0], y = visible[i][1], z = visible[i][2];
-    if (tiles[y][x][z].state != state_num - 1)
+    if (tiles[y][x][z].state != states_count - 1)
       break;
   }
   if (i >= visible_count) {
@@ -1320,9 +1409,9 @@ void iSpecialKeyPress(unsigned char key) {
         return;
       player.km.la = dir;
       iBodyMove(target, (body_t *)&player);
-      if (tiles[(int)target.y][(int)target.x][(int)target.z].state < state_num - 1) {
+      if (tiles[(int)target.y][(int)target.x][(int)target.z].state < states_count - 1) {
         tiles[(int)target.y][(int)target.x][(int)target.z].state++;
-        tiles[(int)target.y][(int)target.x][(int)target.z].state %= state_num;
+        tiles[(int)target.y][(int)target.x][(int)target.z].state %= states_count;
         player.score += 25;
       }
       sound_3 = iPlaySound("assets/sounds/jump_sound.wav", false, 40);
@@ -1333,6 +1422,7 @@ void iSpecialKeyPress(unsigned char key) {
 int main(int argc, char *argv[]) {
   glutInit(&argc, argv);
   iSetTransparency(1);
+  iLoadLevel(1);
   iLoadResource();
   printf("%d\n", sizeof(blocksPos3d) / sizeof(blocksPos3d[0]));
   iInitializeSound();
