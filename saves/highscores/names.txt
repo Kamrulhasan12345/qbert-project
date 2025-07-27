@@ -1,1 +1,4 @@
-s 1100
+kamrul 925
+wss 525
+kk 400
+ajk 0
