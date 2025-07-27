@@ -8,7 +8,7 @@
 #include "iSound.h"
 
 Image bg, help, life, qbert, pause_button, pause_text, dialogue, gameover, qbert_up, qbert_down,
-    qbert_right, highscoreimage;
+    qbert_right, highscoreimage,gamecomplete,nxtlvl,bck;
 Image *qbert_looker;
 FrameSet frames, frames_1, spin_frame, ball_frame, qbert_invert;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
@@ -240,6 +240,9 @@ void iLoadResource() {
   iLoadImage(&dialogue, "assets/images/dialogue.png");
   iLoadImage(&gameover, "assets/images/gameover.png");
   iLoadImage(&highscoreimage, "assets/images/highscoreimage.png");
+  iLoadImage(&gamecomplete, "assets/images/youwin.png");
+  iLoadImage(&nxtlvl, "assets/images/nxtlvl.png");
+   iLoadImage(&bck, "assets/images/bck.png");
   iResizeImage(&qbert, 35, 40);
   iResizeImage(&qbert_up, 35, 40);
   iResizeImage(&qbert_down, 35, 40);
@@ -249,6 +252,8 @@ void iLoadResource() {
   iScaleImage(&pause_text, 1.6);
   iScaleImage(&dialogue, 1.5);
   iScaleImage(&gameover, 0.7);
+  iScaleImage(&nxtlvl,0.7);
+  iScaleImage(&bck,0.5);
   iInitSprite(&snake);
   iInitSprite(&qbert_jump);
   iInitSprite(&qbert_spin);
@@ -427,11 +432,6 @@ void iLoadLevel(int level) {
   world = gameLevel;
 }
 
-void iCompleteLevel() {
-  // load levelup/complete game screen and then load next level
-  // Here show next level (will set the level_completed to false afterwards)
-  // or show complete game (will set endgame to true and level_completed to false)
-}
 
 void iClearQueue() {
   for (int i = 0; i < MAX_SIZE * MAX_SIZE * MAX_SIZE + 1; i++)
@@ -738,6 +738,19 @@ void iPauseMenu() {
   iShowLoadedImage(300, 578, &pause_text);
 }
 
+void iCompleteLevel() {
+  iSetTransparentColor(32, 56, 94, 0.95);
+  iFilledRectangle(187, 200, 500, 500);
+  iShowLoadedImage(280,518,&gamecomplete);
+  iShowLoadedImage(350,400,&nxtlvl);
+  iShowLoadedImage(340,320,&bck);
+  // load levelup/complete game screen and then load next level
+  // Here show next level (will set the level_completed to false afterwards)
+  // or show complete game (will set endgame to true and level_completed to false)
+}
+
+
+
 void iGameOver() {
   end_game = true;
   iSetTransparentColor(32, 56, 94, 0.95);
@@ -904,6 +917,12 @@ void iPlayer() {
     player.km.pos.y = 0;
     player.km.pos.z = 0;
   }
+  if (level_completed){
+    
+    player.km.pos.x = 0;
+    player.km.pos.y = 0;
+    player.km.pos.z = 0;
+  }
 }
 
 void iLoseLife(player_t *player) {
@@ -1032,6 +1051,8 @@ position_t iGetNextStep(position_t s, position_t e) {
 void iEnemyStep() {
   if (pause)
     return;
+    if (level_completed)
+    return;
   for (int i = 0; i < NUM_ENEMIES; i++) {
     switch (enemies[i].type) {
     case ENEMY_COILY:
@@ -1086,6 +1107,9 @@ void iEnemy() {
     enemies[i].km.jump.duration = 100;
     enemies[i].km.jump.t = 0;
     if (pause) {
+      enemies[i].km.pos.x = 3, enemies[i].km.pos.y = 7, enemies[i].km.pos.z = 4;
+    }
+    if (level_completed){
       enemies[i].km.pos.x = 3, enemies[i].km.pos.y = 7, enemies[i].km.pos.z = 4;
     }
   }
@@ -1248,7 +1272,7 @@ void iDraw() {
   else if (app_state == STATE_HELP) {
     iHelp();
   } else if (app_state == STATE_GAME) {
-    if (!end_game) {
+    if (!end_game && !level_completed) {
       iSetColor(255, 255, 255);
       char pos[50];
       snprintf(pos, 50, "%d, %d, %d", (int)player.km.pos.x, (int)player.km.pos.y,
@@ -1268,8 +1292,7 @@ void iDraw() {
       char score[50];
       snprintf(score, 50, "%d", player.score);
       iTextBold(70, 700, score);
-      if (level_completed)
-        iCompleteLevel();
+     
     }
 
     for (int i = 0; i < NUM_ENEMIES; i++) {
@@ -1285,6 +1308,11 @@ void iDraw() {
       iPauseMenu();
       return;
     }
+     if (level_completed){
+        iCompleteLevel();
+        return;
+     }
+   
     if (end_game) {
       iSetColor(255, 0, 0);
       iText(200, 325, playername, GLUT_BITMAP_HELVETICA_18);
