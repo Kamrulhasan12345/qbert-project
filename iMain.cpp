@@ -135,6 +135,8 @@ int numHighScore = 0;
 char playername[100] = "";
 int inputpos = 0;
 
+int cheat=0;
+
 double start_x = width / 2.0;
 double start_y = height * 0.9;
 double tile_width = 40;
@@ -148,7 +150,7 @@ bool hover_start = false, hover_resume = false, hover_setting = false, hover_hel
      hover_high = false;
 bool hover_credits = false, hover_exit = false, end_game = false;
 bool entername = false, show_highscore = false;
-bool level_completed = false;
+bool level_completed = false,cheat_on=false;
 
 // double blocksPos3d[][3] = {{7, 7, 0},
 //                            {6, 7, 1},
@@ -585,6 +587,7 @@ void iDrawEnemy(enemy_t *enemy) {
 }
 
 bool iPECollision(enemy_t *enemy) {
+  if (cheat_on) return false;
   if ((world.player.km.pos.x == enemy->km.pos.x) && (world.player.km.pos.y == enemy->km.pos.y) &&
       (world.player.km.pos.z == enemy->km.pos.z))
     return true;
@@ -1475,23 +1478,78 @@ void iKeyPress(unsigned char key) {
       break;
     }
   } else if (app_state == STATE_GAME && !end_game) {
+    
     switch (key) {
-    case 'q':
     case ESC:
       iSaveGame();
       iQuitGame();
       break;
-    case 'r': {
-      if (end_game)
-        return;
-      world.player.km.pos.x = 0;
-      world.player.km.pos.y = 0;
-      world.player.km.pos.z = 0;
-      // printf("%lf %lf
-      // %lf\n",world.player.km.pos.x,world.player.km.pos.y,world.player.km.pos.z);
-      break;
+      case 's':{
+      if (cheat==0)
+      cheat++;
+      break;}
+       case 'r':{
+      if (cheat==1)
+      cheat++;
+      break;}
+       case 'm':{
+      if (cheat==2)
+      cheat++;
+      break;}
+       case 'k':{
+      if (cheat==3)
+      cheat++;
+      break;}
+       case 'h':{
+      if (cheat==4){
+      cheat++;
+        cheat_on=true;
     }
-    default:
+      break;}
+        case 'b':{
+          if (cheat_on && cheat==5){
+            cheat--;
+          }
+          else if(!cheat_on)cheat=0;
+          break;
+        }
+           case 'u':{
+          if (cheat_on && cheat==4){
+            cheat--;
+          }
+          else if(!cheat_on)cheat=0;
+          else if (cheat_on) cheat=5;
+          break;
+        }
+           case 'e':{
+          if (cheat_on && cheat==3){
+            cheat--;
+          }
+          else if(!cheat_on)cheat=0;
+          else if (cheat_on) cheat=5;
+          break;
+        }
+           case 't':{
+          if (cheat_on && cheat==2){
+            cheat--;
+          }
+          else if(!cheat_on)cheat=0;
+          else if (cheat_on) cheat=5;
+          break;
+        }
+           case 'z':{
+          if (cheat_on && cheat==1){
+            cheat--;
+            cheat_on=false;
+          }
+          else if(!cheat_on)cheat=0;
+          else if (cheat_on) cheat=5;
+          break;
+        }
+    
+  default:{
+    cheat=0;
+  }
       break;
     }
   } else if (app_state == STATE_GAME && end_game) {
