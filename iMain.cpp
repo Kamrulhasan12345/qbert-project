@@ -135,7 +135,7 @@ int numHighScore = 0;
 char playername[100] = "";
 int inputpos = 0;
 
-int cheat=0;
+int cheat = 0;
 
 double start_x = width / 2.0;
 double start_y = height * 0.9;
@@ -150,7 +150,7 @@ bool hover_start = false, hover_resume = false, hover_setting = false, hover_hel
      hover_high = false;
 bool hover_credits = false, hover_exit = false, end_game = false;
 bool entername = false, show_highscore = false;
-bool level_completed = false,cheat_on=false;
+bool level_completed = false, cheat_on = false;
 
 // double blocksPos3d[][3] = {{7, 7, 0},
 //                            {6, 7, 1},
@@ -333,13 +333,15 @@ bool checkHighScore(int score) {
   return score > highscores[9].score;
 }
 
-void iLoadPlayer() {
+void iLoadPlayer(bool initialized) {
   world.player.km.jump.active = 0;
   world.player.km.jump.duration = 250;
   world.player.km.jump.t = 0;
-  world.player.lives = 3;
-  world.player.score = 0;
   world.player.max_lives = 3;
+  world.player.lives = 3;
+  if (initialized) {
+    world.player.score = 0;
+  }
   world.player.ko = true;
 }
 
@@ -469,7 +471,7 @@ void iLoadLevel(int level) {
 
   iLoadBlocks();
   iLoadEnemies();
-  iLoadPlayer();
+  iLoadPlayer(false);
 }
 
 void iPrintWorld(world_t *world) {
@@ -563,6 +565,10 @@ void iSideOutline(double x, double y) {
 }
 
 void iDrawEnemy(enemy_t *enemy) {
+
+  // do your stuff here
+  // instead of setting colors here, just declare a pointer to a enemy image/ sprite and then
+  // finally draw it.
   switch (enemy->type) {
   case ENEMY_COILY:
     iSetColor(coily.r, coily.g, coily.b);
@@ -587,7 +593,8 @@ void iDrawEnemy(enemy_t *enemy) {
 }
 
 bool iPECollision(enemy_t *enemy) {
-  if (cheat_on) return false;
+  if (cheat_on)
+    return false;
   if ((world.player.km.pos.x == enemy->km.pos.x) && (world.player.km.pos.y == enemy->km.pos.y) &&
       (world.player.km.pos.z == enemy->km.pos.z))
     return true;
@@ -775,7 +782,6 @@ void iMenu() {
 }
 
 void iQuitGame() {
-  app_state = STATE_MENU;
   iPauseTimer(enemy_step_timer);
   iPauseTimer(world_timer);
 }
@@ -936,8 +942,8 @@ void iLoseLife() {
   if (world.player.lives > 0)
     world.player.lives--;
   if (world.player.lives == 0) {
-    iQuitGame();
-    iGameOver();
+
+    end_game = true;
   } else {
     int ind = rand() % world.visible_count;
     world.player.km.pos.x = world.visible[ind][0];
@@ -1120,9 +1126,11 @@ void iCheckCompletion() {
   }
   if (i >= world.visible_count) {
     // completed
-    printf("level completed!\n");
+    // printf("level completed!\n");
     if (!level_completed) {
       level_completed = true;
+      if (world.level_num >= 3)
+        end_game = true;
     }
     // go to next level, or show completion
   }
@@ -1164,7 +1172,7 @@ void iSaveGame() {
   // save world binary file
   FILE *fp = fopen("./saves/resume.dat", "wb+");
   if (fp == NULL) {
-    printf("Error opening resume file at ./saves/resume.dat");
+    printf("Error opening resume file at ./saves/resume.dat\n");
     return;
   }
   int f = fwrite(&world, sizeof(world), 1, fp);
@@ -1179,7 +1187,7 @@ void iSaveGame() {
 void iResume() {
   FILE *fp = fopen("./saves/resume.dat", "rb+");
   if (fp == NULL) {
-    printf("Error opening resume file at ./saves/resume.dat");
+    printf("Error opening resume file at ./saves/resume.dat\n");
     return;
   }
   fread(&world, sizeof(world), 1, fp);
@@ -1205,6 +1213,7 @@ void iGame() {
   end_game = false;
   level_completed = false;
   iLoadLevel(1);
+  iLoadPlayer(true);
   if (!enemy_step_timer)
     enemy_step_timer = iSetTimer(1000, iEnemyStep);
   else
@@ -1236,13 +1245,9 @@ void iDraw() {
   } else if (app_state == STATE_SETTING) {
     iSetting();
     iShowSprite(&qbert_spin);
-  }
-
-  else if (app_state == STATE_HIGHSCORE) {
+  } else if (app_state == STATE_HIGHSCORE) {
     iHighscore();
-  }
-
-  else if (app_state == STATE_HELP) {
+  } else if (app_state == STATE_HELP) {
     iHelp();
   } else if (app_state == STATE_GAME) {
     if (!end_game && !level_completed) {
@@ -1266,25 +1271,25 @@ void iDraw() {
       snprintf(score, 50, "%d", world.player.score);
       iTextBold(70, 700, score);
     }
-
-    for (int i = 0; i < world.enemy_count; i++) {
-      if (iPECollision(&world.enemies[i])) {
-        iLoseLife();
-        return;
-      }
-    }
-
-    // iGame();
     iDrawQueue();
     if (pause) {
       iPauseMenu();
       return;
     }
-    if (level_completed)
-      iCompleteLevel();
     if (end_game) {
-      iSetColor(255, 0, 0);
-      iText(200, 325, playername, GLUT_BITMAP_HELVETICA_18);
+      iQuitGame();
+      iGameOver();
+      return;
+    }
+    if (level_completed) {
+      iCompleteLevel();
+      return;
+    }
+    for (int i = 0; i < world.enemy_count; i++) {
+      if (iPECollision(&world.enemies[i])) {
+        iLoseLife();
+        return;
+      }
     }
   }
 
@@ -1376,6 +1381,7 @@ void iMouse(int button, int state, int mx, int my) {
           iRestart();
         } else if (mx > 352 && mx < 352 + 145 && my > 440 - 120 && my < 440 - 120 + 35) {
           iSaveGame();
+          app_state = STATE_MENU;
           iQuitGame();
           pause = false;
         } else if (mx > 352 && mx < 352 + 154 && my > 440 - 60 && my < 440 - 60 + 35) {
@@ -1405,6 +1411,7 @@ void iMouse(int button, int state, int mx, int my) {
           // so, basically save everything to resume.dat in this step
           if (world.level_num < 3)
             iSaveGame();
+          app_state = STATE_MENU;
           iQuitGame();
         }
       }
@@ -1478,79 +1485,88 @@ void iKeyPress(unsigned char key) {
       break;
     }
   } else if (app_state == STATE_GAME && !end_game) {
-    
     switch (key) {
     case ESC:
       iSaveGame();
+      app_state = STATE_MENU;
       iQuitGame();
       break;
-      case 's':{
-      if (cheat==0)
-      cheat++;
-      break;}
-       case 'r':{
-      if (cheat==1)
-      cheat++;
-      break;}
-       case 'm':{
-      if (cheat==2)
-      cheat++;
-      break;}
-       case 'k':{
-      if (cheat==3)
-      cheat++;
-      break;}
-       case 'h':{
-      if (cheat==4){
-      cheat++;
-        cheat_on=true;
-    }
-      break;}
-        case 'b':{
-          if (cheat_on && cheat==5){
-            cheat--;
-          }
-          else if(!cheat_on)cheat=0;
-          break;
-        }
-           case 'u':{
-          if (cheat_on && cheat==4){
-            cheat--;
-          }
-          else if(!cheat_on)cheat=0;
-          else if (cheat_on) cheat=5;
-          break;
-        }
-           case 'e':{
-          if (cheat_on && cheat==3){
-            cheat--;
-          }
-          else if(!cheat_on)cheat=0;
-          else if (cheat_on) cheat=5;
-          break;
-        }
-           case 't':{
-          if (cheat_on && cheat==2){
-            cheat--;
-          }
-          else if(!cheat_on)cheat=0;
-          else if (cheat_on) cheat=5;
-          break;
-        }
-           case 'z':{
-          if (cheat_on && cheat==1){
-            cheat--;
-            cheat_on=false;
-          }
-          else if(!cheat_on)cheat=0;
-          else if (cheat_on) cheat=5;
-          break;
-        }
-    
-  default:{
-    cheat=0;
-  }
+    // srmkh cheat activate
+    case 's': {
+      if (cheat == 0)
+        cheat++;
       break;
+    }
+    case 'r': {
+      if (cheat == 1)
+        cheat++;
+      break;
+    }
+    case 'm': {
+      if (cheat == 2)
+        cheat++;
+      break;
+    }
+    case 'k': {
+      if (cheat == 3)
+        cheat++;
+      break;
+    }
+    case 'h': {
+      if (cheat == 4) {
+        cheat++;
+        cheat_on = true;
+      }
+      break;
+    }
+    // buetz cheat deactivate
+    case 'b': {
+      if (cheat_on && cheat == 5) {
+        cheat--;
+      } else if (!cheat_on)
+        cheat = 0;
+      break;
+    }
+    case 'u': {
+      if (cheat_on && cheat == 4) {
+        cheat--;
+      } else if (!cheat_on)
+        cheat = 0;
+      else if (cheat_on)
+        cheat = 5;
+      break;
+    }
+    case 'e': {
+      if (cheat_on && cheat == 3) {
+        cheat--;
+      } else if (!cheat_on)
+        cheat = 0;
+      else if (cheat_on)
+        cheat = 5;
+      break;
+    }
+    case 't': {
+      if (cheat_on && cheat == 2) {
+        cheat--;
+      } else if (!cheat_on)
+        cheat = 0;
+      else if (cheat_on)
+        cheat = 5;
+      break;
+    }
+    case 'z': {
+      if (cheat_on && cheat == 1) {
+        cheat--;
+        cheat_on = false;
+      } else if (!cheat_on)
+        cheat = 0;
+      else if (cheat_on)
+        cheat = 5;
+      break;
+    }
+    default: {
+      cheat = 0;
+    } break;
     }
   } else if (app_state == STATE_GAME && end_game) {
     switch (key) {
@@ -1621,7 +1637,7 @@ void iSpecialKeyPress(unsigned char key) {
     if (key == GLUT_KEY_LEFT || key == GLUT_KEY_RIGHT || key == GLUT_KEY_UP ||
         key == GLUT_KEY_DOWN) {
       // handle scores
-      if (end_game)
+      if (end_game || level_completed)
         return;
       if (world.player.km.jump.active)
         return;
