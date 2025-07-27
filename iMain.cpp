@@ -772,11 +772,10 @@ void iMenu() {
 }
 
 void iQuitGame() {
+  app_state = STATE_MENU;
   iPauseTimer(enemy_step_timer);
   iPauseTimer(world_timer);
 }
-
-void iResume();
 
 void iPauseMenu() {
   pause = true;
@@ -1119,8 +1118,9 @@ void iCheckCompletion() {
   if (i >= world.visible_count) {
     // completed
     printf("level completed!\n");
-    if (!level_completed)
+    if (!level_completed) {
       level_completed = true;
+    }
     // go to next level, or show completion
   }
 }
@@ -1157,9 +1157,50 @@ void iWorldFwd() {
   iCheckCompletion();
 }
 
+void iSaveGame() {
+  // save world binary file
+  FILE *fp = fopen("./saves/resume.dat", "wb+");
+  if (fp == NULL) {
+    printf("Error opening resume file at ./saves/resume.dat");
+    return;
+  }
+  int f = fwrite(&world, sizeof(world), 1, fp);
+  if (f) {
+    printf("Successfully saved progress.\n");
+  } else {
+    printf("Couldn't save progress.\n");
+  }
+  fclose(fp);
+}
+
+void iResume() {
+  FILE *fp = fopen("./saves/resume.dat", "rb+");
+  if (fp == NULL) {
+    printf("Error opening resume file at ./saves/resume.dat");
+    return;
+  }
+  fread(&world, sizeof(world), 1, fp);
+  fclose(fp);
+  remove("./saves/resume.dat");
+  iPrintWorld(&world);
+  app_state = STATE_GAME;
+  end_game = false;
+  level_completed = false;
+  if (!enemy_step_timer)
+    enemy_step_timer = iSetTimer(1000, iEnemyStep);
+  else
+    iResumeTimer(enemy_step_timer);
+  // set a 60 fps world progress timer that will do what I want at 60fps
+  if (!world_timer)
+    world_timer = iSetTimer(dt, iWorldFwd);
+  else
+    iResumeTimer(world_timer);
+}
+
 void iGame() {
   app_state = STATE_GAME;
   end_game = false;
+  level_completed = false;
   iLoadLevel(1);
   if (!enemy_step_timer)
     enemy_step_timer = iSetTimer(1000, iEnemyStep);
@@ -1305,12 +1346,9 @@ void iMouse(int button, int state, int mx, int my) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
       if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 500 && my < 530) {
         iGame();
-      }
-      /*  else if
-        (mx>width/2-100&&mx<width/2+50&&my>435&&my<465)
-        { iResume();
-        }*/
-      else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 370 && my < 400) {
+      } else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 435 && my < 465) {
+        iResume();
+      } else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 370 && my < 400) {
         iSetting();
       } else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 305 && my < 335) {
         iHelp();
@@ -1328,27 +1366,43 @@ void iMouse(int button, int state, int mx, int my) {
       if (mx > 700 && mx < 737 && my > 715 && my < 715 + 37) {
         iPauseMenu();
       }
-      if (pause && mx > 352 && mx < 352 + 145 && my > 500 && my < 500 + 35) {
-        pause = false;
-      } else if (pause && mx > 352 && mx < 352 + 145 && my > 440 && my < 440 + 35) {
-        iRestart();
-      } else if (pause && mx > 352 && mx < 352 + 145 && my > 440 - 120 && my < 440 - 120 + 35) {
-        app_state = STATE_MENU;
-        iQuitGame();
-        pause = false;
-      } else if (pause && mx > 352 && mx < 352 + 154 && my > 440 - 60 && my < 440 - 60 + 35) {
-        bool soundOn = (sound1 || sound2);
+      if (pause) {
+        if (mx > 352 && mx < 352 + 145 && my > 500 && my < 500 + 35) {
+          pause = false;
+        } else if (mx > 352 && mx < 352 + 145 && my > 440 && my < 440 + 35) {
+          iRestart();
+        } else if (mx > 352 && mx < 352 + 145 && my > 440 - 120 && my < 440 - 120 + 35) {
+          iSaveGame();
+          iQuitGame();
+          pause = false;
+        } else if (mx > 352 && mx < 352 + 154 && my > 440 - 60 && my < 440 - 60 + 35) {
+          bool soundOn = (sound1 || sound2);
 
-        if (soundOn) {
-          sound1 = false;
-          sound2 = false;
-          iPauseSound(sound_1);
-          iPauseSound(sound_2);
-        } else {
-          sound1 = true;
-          sound2 = false;
-          iResumeSound(sound_1);
-          iPauseSound(sound_2);
+          if (soundOn) {
+            sound1 = false;
+            sound2 = false;
+            iPauseSound(sound_1);
+            iPauseSound(sound_2);
+          } else {
+            sound1 = true;
+            sound2 = false;
+            iResumeSound(sound_1);
+            iPauseSound(sound_2);
+          }
+        }
+      }
+      if (level_completed) {
+        if (world.level_num < 3)
+          iLoadLevel(++world.level_num);
+        if (mx > 365 && mx < 495 && my > 442 && my < 522) {
+          // next level
+          level_completed = false;
+        } else if (mx > 350 && mx < 500 && my > 330 && my < 385) {
+          // back, but also save to file for resuming
+          // so, basically save everything to resume.dat in this step
+          if (world.level_num < 3)
+            iSaveGame();
+          iQuitGame();
         }
       }
     }
@@ -1424,7 +1478,7 @@ void iKeyPress(unsigned char key) {
     switch (key) {
     case 'q':
     case ESC:
-      app_state = STATE_MENU;
+      iSaveGame();
       iQuitGame();
       break;
     case 'r': {
