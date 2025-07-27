@@ -8,7 +8,7 @@
 #include "iSound.h"
 
 Image bg, help, life, qbert, pause_button, pause_text, dialogue, gameover, qbert_up, qbert_down,
-    qbert_right, highscoreimage,gamecomplete,nxtlvl,bck;
+    qbert_right, highscoreimage,gamecomplete,nxtlvl,bck,credits;
 Image *qbert_looker;
 FrameSet frames, frames_1, spin_frame, ball_frame, qbert_invert;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
@@ -242,7 +242,8 @@ void iLoadResource() {
   iLoadImage(&highscoreimage, "assets/images/highscoreimage.png");
   iLoadImage(&gamecomplete, "assets/images/youwin.png");
   iLoadImage(&nxtlvl, "assets/images/nxtlvl.png");
-   iLoadImage(&bck, "assets/images/bck.png");
+  iLoadImage(&bck, "assets/images/bck.png");
+  iLoadImage(&credits, "assets/images/credits.jpeg");
   iResizeImage(&qbert, 35, 40);
   iResizeImage(&qbert_up, 35, 40);
   iResizeImage(&qbert_down, 35, 40);
@@ -872,7 +873,18 @@ void iHighscore() {
   iSetColor(255, 51, 51);
   iTextBold(385, 50, "Back");
 }
-void iCredits();
+void iCredits(){
+  app_state=STATE_CREDITS;
+  iSetColor(32, 56, 94);
+  iFilledRectangle(0, 0, 800, 800);
+  iShowLoadedImage(0,50,&credits);
+   iSetColor(255, 255, 51);
+  iFilledRectangle(370, 40, 70, 28);
+  iSetColor(255, 51, 51);
+  iTextBold(385, 50, "Back");
+ 
+  
+}
 
 void iBlock() {
   for (int i = 0; i < n; i++) {
@@ -1325,6 +1337,10 @@ void iDraw() {
     if (editor.grid)
       iGrid();
   }
+
+  else if (app_state == STATE_CREDITS){
+    iCredits();
+  }
 }
 /*
 function iMouseMove() is called when the user moves the
@@ -1390,11 +1406,11 @@ void iMouse(int button, int state, int mx, int my) {
       } else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 240 && my < 270) {
         iHighscore();
       }
-      /*
+      
       else if
       (mx>width/2-100&&mx<width/2+50&&my>175&&my<205)
       { iCredits();
-      } */
+      } 
       else if (mx > width / 2 - 100 && mx < width / 2 + 50 && my > 110 && my < 140) {
         iExit();
       }
@@ -1456,6 +1472,11 @@ void iMouse(int button, int state, int mx, int my) {
       iMenu();
     }
   } else if (app_state == STATE_HIGHSCORE) {
+    if (mx > 370 && mx < 370 + 70 && my > 40 && my < 40 + 28) {
+      iMenu();
+    }
+  }
+  else if (app_state == STATE_CREDITS) {
     if (mx > 370 && mx < 370 + 70 && my > 40 && my < 40 + 28) {
       iMenu();
     }
