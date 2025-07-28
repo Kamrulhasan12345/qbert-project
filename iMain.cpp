@@ -8,7 +8,7 @@
 #include "iSound.h"
 
 Image bg, help, life, qbert, pause_button, pause_text, dialogue, gameover, qbert_up, qbert_down,
-    qbert_right, highscoreimage, gamecomplete, nxtlvl, bck, credits;
+    qbert_right, highscoreimage, gamecomplete, nxtlvl, bck, credits,ball1,snake1,ugg1,sam1,level1obj,level2obj,level3obj;
 FrameSet frames, frames_1, spin_frame, ball_frame, qbert_invert;
 Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 
@@ -150,7 +150,7 @@ bool hover_start = false, hover_resume = false, hover_setting = false, hover_hel
      hover_high = false;
 bool hover_credits = false, hover_exit = false, end_game = false;
 bool entername = false, show_highscore = false;
-bool level_completed = false, cheat_on = false;
+bool level_completed = false, cheat_on = false,win_cond=false;
 
 // double blocksPos3d[][3] = {{7, 7, 0},
 //                            {6, 7, 1},
@@ -230,13 +230,27 @@ void iLoadResource() {
   iLoadImage(&gameover, "assets/images/gameover.png");
   iLoadImage(&highscoreimage, "assets/images/highscoreimage.png");
   iLoadImage(&gamecomplete, "assets/images/youwin.png");
+  iLoadImage(&credits, "assets/images/credits.jpeg");
   iLoadImage(&nxtlvl, "assets/images/nxtlvl.png");
   iLoadImage(&bck, "assets/images/bck.png");
-  iLoadImage(&credits, "assets/images/credits.jpeg");
+  iLoadImage(&ball1, "assets/images/sprites/ball/ball002.png");
+  iLoadImage(&snake1, "assets/images/sprites/snake/snake002.png");
+  iLoadImage(&ugg1, "assets/images/ugg.png");
+  iLoadImage(&sam1, "assets/images/sam.png");
+  iLoadImage(&level1obj, "assets/images/level1obj.png");
+  iLoadImage(&level2obj, "assets/images/level2obj.png");
+  iLoadImage(&level3obj, "assets/images/level3obj.png");
   iResizeImage(&qbert, 35, 40);
   iResizeImage(&qbert_up, 35, 40);
   iResizeImage(&qbert_down, 35, 40);
   iResizeImage(&qbert_right, 35, 40);
+  iScaleImage(&snake1,1.8);
+  iScaleImage(&ball1,1.8);
+  iScaleImage(&ugg1,1.8);
+  iScaleImage(&sam1,1.8);
+  iScaleImage(&level1obj,1.5);
+  iScaleImage(&level2obj,1.5);
+  iScaleImage(&level3obj,1.5);
   iResizeImage(&help, 750, 700);
   iResizeImage(&life, 23, 23);
   iScaleImage(&pause_text, 1.6);
@@ -569,27 +583,27 @@ void iDrawEnemy(enemy_t *enemy) {
   // do your stuff here
   // instead of setting colors here, just declare a pointer to a enemy image/ sprite and then
   // finally draw it.
+  Image * enemy_sprite;
   switch (enemy->type) {
   case ENEMY_COILY:
-    iSetColor(coily.r, coily.g, coily.b);
+    enemy_sprite=&snake1;
     break;
   case ENEMY_UGG:
-    iSetColor(ugg.r, ugg.g, ugg.b);
+    enemy_sprite=&ugg1;
     break;
   case ENEMY_SAM:
-    iSetColor(sam.r, sam.g, sam.b);
+    enemy_sprite=&sam1;
     break;
   default:
-    iSetColor(255, 0, 0);
+    enemy_sprite=&ball1;
     break;
   }
   // printf("%d %d
   // %d\n",(int)enemy->km.pos.x,(int)enemy->km.pos.y,(int)enemy->km.pos.z);
-  iSetColor(255, 0, 0);
-  iFilledCircle(start_x + (enemy->km.pos.z - enemy->km.pos.x) * tile_width * cos(PI / 6),
+  iShowLoadedImage(start_x + (enemy->km.pos.z - enemy->km.pos.x) * tile_width * cos(PI / 6),
                 start_y - (enemy->km.pos.z + enemy->km.pos.x) * tile_width / 2 -
                     enemy->km.pos.y * tile_height - tile_width / 2,
-                tile_width / 5);
+                      enemy_sprite);
 }
 
 bool iPECollision(enemy_t *enemy) {
@@ -832,6 +846,32 @@ void iGameOver() {
   iText(255, 325, playername, GLUT_BITMAP_HELVETICA_18);
   iTextBold(360, 290, "Press ENTER to save");
 }
+void iLastScreen(){
+win_cond=true;
+iSetTransparentColor(32, 56, 94, 0.95);
+  iFilledRectangle(187, 200, 500, 500);
+  iShowLoadedImage(300, 578, &qbert);
+  iShowLoadedImage(287, 613, &dialogue);
+  iShowLoadedImage(290, 450, &gamecomplete);
+  iSetColor(247, 233, 30);
+  iTextBold(287, 440, "Your Score:");
+  char score[50];
+  snprintf(score, 50, "%d", world.player.score);
+  iTextBold(380, 440, score);
+  iSetColor(255, 255, 0);
+  if (checkHighScore(world.player.score)) {
+    iSetColor(247, 233, 30);
+    iTextBold(250, 380, "NEW HIGH SCORE!");
+  }
+  iTextBold(250, 350, "Enter your name:");
+  iSetColor(255, 255, 255);
+  iRectangle(250, 320, 200, 25);
+  iSetColor(0, 0, 0);
+  iFilledRectangle(251, 321, 198, 23);
+  iSetColor(255, 255, 0);
+  iText(255, 325, playername, GLUT_BITMAP_HELVETICA_18);
+  iTextBold(360, 290, "Press ENTER to save");
+}
 
 void iSetting() {
   app_state = STATE_SETTING;
@@ -903,14 +943,14 @@ void iHighscore() {
   iFilledRectangle(0, 0, 800, 800);
   iShowLoadedImage(240, 507, &highscoreimage);
   iSetColor(255, 255, 51);
-  iFilledRectangle(100, 550, 70, 28);
-  iFilledRectangle(320, 550, 70, 28);
-  iFilledRectangle(600, 550, 70, 28);
+  iFilledRectangle(100, 560, 70, 28);
+  iFilledRectangle(320, 560, 70, 28);
+  iFilledRectangle(600, 560, 70, 28);
   iSetColor(255, 51, 51);
-  iTextBold(115, 558, "Rank");
-  iTextBold(335, 558, "Name");
-  iTextBold(615, 558, "Score");
-  for (int i = numHighScore; i >= 0; i--) {
+  iTextBold(115, 558+11, "Rank");
+  iTextBold(335, 558+11, "Name");
+  iTextBold(615, 558+11, "Score");
+  for (int i = numHighScore-1; i >= 0; i--) {
     iSetColor(255, 251, 51);
     char rank[10];
     char name[200];
@@ -918,9 +958,9 @@ void iHighscore() {
     snprintf(rank, sizeof(rank), "%d.", i + 1);
     snprintf(name, sizeof(name), "%s", highscores[i].name);
     snprintf(score, sizeof(score), "%d", highscores[i].score);
-    iTextAdvanced(115, 515 - i * 50, rank, 0.2, 1.0);
-    iTextAdvanced(320, 515 - i * 50, name, 0.2, 1.0);
-    iTextAdvanced(605, 515 - i * 50, score, 0.2, 1.0);
+    iTextAdvanced(115, 530 - i * 50, rank, 0.2, 1.0);
+    iTextAdvanced(320, 530 - i * 50, name, 0.2, 1.0);
+    iTextAdvanced(605, 530 - i * 50, score, 0.2, 1.0);
   }
   iSetColor(255, 255, 51);
   iFilledRectangle(370, 40, 70, 28);
@@ -1066,6 +1106,8 @@ void iEnemyStep() {
     return;
   if (level_completed)
     return;
+    if (win_cond)
+    return;
   for (int i = 0; i < world.enemy_count; i++) {
     switch (world.enemies[i].type) {
     case ENEMY_COILY:
@@ -1127,11 +1169,12 @@ void iCheckCompletion() {
   if (i >= world.visible_count) {
     // completed
     // printf("level completed!\n");
-    if (!level_completed) {
+    if (!level_completed ) {
       level_completed = true;
       if (world.level_num >= 3)
-        end_game = true;
+        win_cond=true;
     }
+
     // go to next level, or show completion
   }
 }
@@ -1197,6 +1240,7 @@ void iResume() {
   app_state = STATE_GAME;
   end_game = false;
   level_completed = false;
+  win_cond = false;
   if (!enemy_step_timer)
     enemy_step_timer = iSetTimer(1000, iEnemyStep);
   else
@@ -1212,6 +1256,7 @@ void iGame() {
   app_state = STATE_GAME;
   end_game = false;
   level_completed = false;
+  win_cond=false;
   iLoadLevel(1);
   iLoadPlayer(true);
   if (!enemy_step_timer)
@@ -1250,7 +1295,7 @@ void iDraw() {
   } else if (app_state == STATE_HELP) {
     iHelp();
   } else if (app_state == STATE_GAME) {
-    if (!end_game && !level_completed) {
+    if (!end_game && !level_completed && !win_cond) {
       iSetColor(255, 255, 255);
       char pos[50];
       snprintf(pos, 50, "%d, %d, %d", (int)world.player.km.pos.x, (int)world.player.km.pos.y,
@@ -1267,9 +1312,29 @@ void iDraw() {
         iShowLoadedImage(30 + i * 35, 740, &life);
       }
       iTextBold(10, 700, "SCORE:");
+      if (world.level_num==1){
+      iTextBold(10,650,"Level: 1");
+      iTextBold(10,600,"Objective :");
+      iShowLoadedImage(110,580,&level1obj);
+      }
+      
+      if (world.level_num==2){
+      iTextBold(10,650,"Level: 2");
+      iTextBold(10,600,"Objective :");
+      iShowLoadedImage(110,580,&level2obj);
+    
+    }
+      if (world.level_num==3){
+      iTextBold(10,650,"Level: 3");
+      iTextBold(10,600,"Objective :");
+      iShowLoadedImage(110,580,&level3obj);
+    }
       char score[50];
       snprintf(score, 50, "%d", world.player.score);
       iTextBold(70, 700, score);
+      iSetColor(255,255,51);
+      if(cheat_on)
+      iTextBold(10,550,"Invincible Mode: ON");
     }
     iDrawQueue();
     if (pause) {
@@ -1281,7 +1346,11 @@ void iDraw() {
       iGameOver();
       return;
     }
-    if (level_completed) {
+    if (win_cond){
+      iQuitGame();
+      iLastScreen();
+    }
+    if (level_completed && world.level_num<=2) {
       iCompleteLevel();
       return;
     }
@@ -1484,7 +1553,7 @@ void iKeyPress(unsigned char key) {
     default:
       break;
     }
-  } else if (app_state == STATE_GAME && !end_game) {
+  } else if (app_state == STATE_GAME && !end_game && !win_cond) {
     switch (key) {
     case ESC:
       iSaveGame();
@@ -1565,10 +1634,13 @@ void iKeyPress(unsigned char key) {
       break;
     }
     default: {
+      if (!cheat_on)
       cheat = 0;
+      else if (cheat_on)
+      cheat = 5;
     } break;
     }
-  } else if (app_state == STATE_GAME && end_game) {
+  } else if ((app_state == STATE_GAME && end_game) || (app_state == STATE_GAME && win_cond) ) {
     switch (key) {
     case '\r':
       if (strlen(playername) > 0) {
@@ -1637,7 +1709,7 @@ void iSpecialKeyPress(unsigned char key) {
     if (key == GLUT_KEY_LEFT || key == GLUT_KEY_RIGHT || key == GLUT_KEY_UP ||
         key == GLUT_KEY_DOWN) {
       // handle scores
-      if (end_game || level_completed)
+      if (end_game || level_completed || win_cond)
         return;
       if (world.player.km.jump.active)
         return;
@@ -1651,7 +1723,7 @@ void iSpecialKeyPress(unsigned char key) {
         world.tiles[(int)target.y][(int)target.x][(int)target.z].state %= world.states_count;
         world.player.score += 25;
       }
-      sound_3 = iPlaySound("assets/sounds/jump_sound.wav", false, 40);
+      sound_3 = iPlaySound("assets/sounds/jump_sound.wav", false, 30);
     }
   }
 }
@@ -1665,9 +1737,9 @@ int main(int argc, char *argv[]) {
   iLoadHighscore();
   printf("%d\n", sizeof(world.blocks) / sizeof(world.blocks[0]));
   iInitializeSound();
-  sound_1 = iPlaySound("assets/sounds/undertale_1.wav", true, 80);
-  sound_2 = iPlaySound("assets/sounds/undertale_2.wav", true, 80);
-  sound_3 = iPlaySound("assets/sounds/jump_sound.wav", false, 40);
+  sound_1 = iPlaySound("assets/sounds/undertale_1.wav", true, 65);
+  sound_2 = iPlaySound("assets/sounds/undertale_2.wav", true, 65);
+  sound_3 = iPlaySound("assets/sounds/jump_sound.wav", false, 30);
   iPauseSound(sound_3);
   iPauseSound(sound_2);
   iSetTimer(600, iAnim);
