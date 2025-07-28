@@ -1774,6 +1774,15 @@ void iSpecialKeyPress(unsigned char key) {
         world.tiles[(int)target.y][(int)target.x][(int)target.z].state++;
         world.tiles[(int)target.y][(int)target.x][(int)target.z].state %= world.states_count;
         world.player.score += 25;
+      } else if (world.tiles[(int)target.y][(int)target.x][(int)target.z].state ==
+                     world.states_count - 1 &&
+                 world.level_num >= 3) {
+        printf("%d %d\n", world.tiles[(int)target.y][(int)target.x][(int)target.z].state,
+               world.level_num);
+        world.tiles[(int)target.y][(int)target.x][(int)target.z].state--;
+        world.player.score -= 25;
+        printf("%d %d\n", world.tiles[(int)target.y][(int)target.x][(int)target.z].state,
+               world.level_num);
       }
       sound_3 = iPlaySound("assets/sounds/jump_sound.wav", false, 30);
     }
