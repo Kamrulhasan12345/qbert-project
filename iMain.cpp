@@ -100,11 +100,11 @@ typedef struct {
   int blocks_count;
   double visible[MAX_BLOCKS][3];
   int visible_count;
-  int8_t level_num, states_count;
+  int level_num, states_count, target_idx;
   color_t states[MAX_STATES];
   color_t l_color, r_color;
   enemy_t enemies[MAX_ENEMIES];
-  int enemy_count;
+  uint8_t enemy_count;
   player_t player;
   tile_t tiles[MAX_SIZE][MAX_SIZE][MAX_SIZE];
 } world_t;
@@ -150,7 +150,8 @@ bool hover_start = false, hover_resume = false, hover_setting = false, hover_hel
      hover_high = false;
 bool hover_credits = false, hover_exit = false, end_game = false;
 bool entername = false, show_highscore = false;
-bool level_completed = false, cheat_on = false;
+bool level_completed = false,
+     cheat_on = true; // TODO: cheat off
 
 // double blocksPos3d[][3] = {{7, 7, 0},
 //                            {6, 7, 1},
@@ -340,14 +341,13 @@ void iLoadPlayer(bool initialized) {
   world.player.max_lives = 3;
   world.player.lives = 3;
   if (initialized) {
-    world.player.score = 0;
+    printf("Setting score to zero.\n"), world.player.score = 0;
   }
   world.player.ko = true;
 }
 
 void iLoadEnemies() {
   for (int i = 0; i < world.enemy_count; i++) {
-    world.enemies[i].type = ENEMY_COILY;
     int idx = rand() % world.visible_count;
     world.enemies[i].km.pos.x = world.visible[idx][0],
     world.enemies[i].km.pos.y = world.visible[idx][1],
@@ -386,6 +386,8 @@ void iLoadBlocks() {
 void iLoadLevel(int level) {
   world_t gameLevel = {0};
 
+  gameLevel.player.score = world.player.score;
+
   FILE *fp;
 
   int mode = -1;
@@ -406,6 +408,9 @@ void iLoadLevel(int level) {
     } else if (!strncmp(line, "START", 5)) {
       sscanf(line, "START %d %d %d", &gameLevel.player.km.pos.x, &gameLevel.player.km.pos.y,
              &gameLevel.player.km.pos.z);
+    } else if (!strncmp(line, "TARGET", 6)) {
+      sscanf(line, "TARGET %d", &gameLevel.target_idx);
+      printf("%d", gameLevel.target_idx);
     } else if (!strncmp(line, "WORLD", 5))
       mode = 0;
     else if (!strncmp(line, "ENEMY", 5))
@@ -467,7 +472,9 @@ void iLoadLevel(int level) {
   }
   fclose(fp);
   // copy everything to global world
+  printf("%d\n", gameLevel.target_idx);
   world = gameLevel;
+  printf("%d\n", world.target_idx);
 
   iLoadBlocks();
   iLoadEnemies();
@@ -479,6 +486,7 @@ void iPrintWorld(world_t *world) {
   printf("%-20s: %d\n", "blocks_count", world->blocks_count);
   printf("%-20s: %d\n", "enemy_count", world->enemy_count);
   printf("%-20s: %d\n", "states_count", world->states_count);
+  printf("%-20s: %d\n", "target_idx", world->target_idx);
   printf("%-20s: {%d, %d, %d, %d}\n", "l_color", world->l_color.r, world->l_color.g,
          world->l_color.b, world->l_color.a);
   printf("%-20s: {%d, %d, %d, %d}\n", "r_color", world->r_color.r, world->r_color.g,
@@ -585,7 +593,7 @@ void iDrawEnemy(enemy_t *enemy) {
   }
   // printf("%d %d
   // %d\n",(int)enemy->km.pos.x,(int)enemy->km.pos.y,(int)enemy->km.pos.z);
-  iSetColor(255, 0, 0);
+  // iSetColor(255, 0, 0);
   iFilledCircle(start_x + (enemy->km.pos.z - enemy->km.pos.x) * tile_width * cos(PI / 6),
                 start_y - (enemy->km.pos.z + enemy->km.pos.x) * tile_width / 2 -
                     enemy->km.pos.y * tile_height - tile_width / 2,
@@ -1067,53 +1075,98 @@ void iEnemyStep() {
   if (level_completed)
     return;
   for (int i = 0; i < world.enemy_count; i++) {
+    printf("%d\n", world.enemies[i].type);
+    position_t pos;
     switch (world.enemies[i].type) {
-    case ENEMY_COILY:
-    case ENEMY_SAM:
-    case ENEMY_UGG:
+    case ENEMY_COILY: {
+      pos = iGetNextStep(
+          world.enemies[i].km.jump.active ? world.enemies[i].km.jump.to : world.enemies[i].km.pos,
+          world.player.km.jump.active ? world.player.km.jump.to : world.player.km.pos);
+      break;
+    }
+    case ENEMY_SAM: {
+      int sequence[4] = {2, 1, 3, 0};
+      switch (world.enemies[i].km.la) {
+      case LOOK_LEFT:
+        sequence[1] = 3, sequence[2] = 0, sequence[3] = 1;
+        break;
+      case LOOK_RIGHT:
+        // keep it as it is
+        break;
+      case LOOK_UP:
+        sequence[0] = 1, sequence[1] = 3, sequence[2] = 0, sequence[3] = 2;
+        break;
+      case LOOK_DOWN:
+        sequence[2] = 0, sequence[3] = 3;
+        break;
+      default:
+        break;
+      }
+      for (int j = 0; j < 4; j++) {
+        pos = iPositionFinder(dirs[sequence[j]], world.enemies[i].km.pos);
+        if (~(int)(pos.x))
+          break;
+      }
+      break;
+    }
+    case ENEMY_UGG: {
+      int sequence[4] = {3, 1, 2, 0};
+      switch (world.enemies[i].km.la) {
+      case LOOK_LEFT:
+        // keep it as it is
+        break;
+      case LOOK_RIGHT:
+        sequence[1] = 2, sequence[2] = 0, sequence[3] = 1;
+        break;
+      case LOOK_UP:
+        sequence[0] = 1, sequence[1] = 2, sequence[2] = 0, sequence[3] = 3;
+        break;
+      case LOOK_DOWN:
+        sequence[2] = 0, sequence[3] = 2;
+        break;
+      default:
+        break;
+      }
+      // printf("sequence: %d %d %d %d\n", sequence[0], sequence[1], sequence[2], sequence[3]);
+      for (int j = 0; j < 4; j++) {
+        pos = iPositionFinder(dirs[sequence[j]], world.enemies[i].km.pos);
+        // printf("pos: %g %g %g\n", pos.x, pos.y, pos.z);
+        if (~(int)(pos.x))
+          break;
+      }
+      break;
+    }
     case ENEMY_WRONGWAY:
     default: {
       // random enemy ai
-      /*for (int j = 0; i < 4; j++)
-        {
-          int d = rand () % 4, s;
-          switch (d)
-            {
-            case 0:
-              s = iBodyMove (world.enemies[i].km.pos.x,
-        world.enemies[i].km.pos.y, world.enemies[i].km.pos.z - 1,
-        &world.enemies[i].km); break; case 1: s = iBodyMove
-        (world.enemies[i].km.pos.x, world.enemies[i].km.pos.y,
-                             world.enemies[i].km.pos.z + 1,
-        &world.enemies[i].km); break; case 2: s = iBodyMove
-        (world.enemies[i].km.pos.x - 1, world.enemies[i].km.pos.y,
-        world.enemies[i].km.pos.z, &world.enemies[i].km); break; case
-        3: s = iBodyMove (world.enemies[i].km.pos.x + 1,
-                             world.enemies[i].km.pos.y,
-        world.enemies[i].km.pos.z, &world.enemies[i].km); break;
-            default:
-              break;
-            }
-          if (s)
-            break;
-        }*/
-      // pathfinding enemy animation
-      position_t step = iGetNextStep(
-          world.enemies[i].km.jump.active ? world.enemies[i].km.jump.to : world.enemies[i].km.pos,
-          world.player.km.jump.active ? world.player.km.jump.to : world.player.km.pos);
-      // printf("Moving to %g, %g, %g.\n", step.x, step.y, step.z);
-      iBodyMove(step, (body_t *)&world.enemies[i]);
+      while (1) {
+        int idx = rand() % 4;
+        pos = iPositionFinder(dirs[idx], world.enemies[i].km.pos);
+        if (~(int)(pos.x))
+          break;
+      }
       break;
     }
     }
-    // printf("here we go: %lf %lf
-    // %lf\n",world.enemies[i].km.pos.x,world.enemies[i].km.pos.y,world.enemies[i].km.pos.z);
+    int dZ = pos.z - world.enemies[i].km.pos.z, dX = pos.x - world.enemies[i].km.pos.x;
+    if (dZ == -1)
+      world.enemies[i].km.la = LOOK_LEFT;
+    else if (dZ == 1)
+      world.enemies[i].km.la = LOOK_RIGHT;
+    else if (dX == -1)
+      world.enemies[i].km.la = LOOK_UP;
+    else if (dX == 1)
+      world.enemies[i].km.la = LOOK_DOWN;
+    // printf("%d %g %g %g\n", world.enemies[i].km.la, world.enemies[i].km.pos.x,
+    //        world.enemies[i].km.pos.y, world.enemies[i].km.pos.z);
+    iBodyMove(pos, (body_t *)&world.enemies[i]);
   }
 }
 
 void iRestart() {
   app_state = STATE_GAME;
   iLoadLevel(world.level_num);
+  iLoadPlayer(true);
   pause = false;
 }
 
@@ -1121,7 +1174,7 @@ void iCheckCompletion() {
   int i;
   for (i = 0; i < world.visible_count; i++) {
     int x = world.visible[i][0], y = world.visible[i][1], z = world.visible[i][2];
-    if (world.tiles[y][x][z].state != world.states_count - 1)
+    if (world.tiles[y][x][z].state != world.target_idx)
       break;
   }
   if (i >= world.visible_count) {
@@ -1650,6 +1703,15 @@ void iSpecialKeyPress(unsigned char key) {
         world.tiles[(int)target.y][(int)target.x][(int)target.z].state++;
         world.tiles[(int)target.y][(int)target.x][(int)target.z].state %= world.states_count;
         world.player.score += 25;
+      } else if (world.tiles[(int)target.y][(int)target.x][(int)target.z].state ==
+                     world.states_count - 1 &&
+                 world.level_num >= 3) {
+        printf("%d %d\n", world.tiles[(int)target.y][(int)target.x][(int)target.z].state,
+               world.level_num);
+        world.tiles[(int)target.y][(int)target.x][(int)target.z].state--;
+        world.player.score -= 25;
+        printf("%d %d\n", world.tiles[(int)target.y][(int)target.x][(int)target.z].state,
+               world.level_num);
       }
       sound_3 = iPlaySound("assets/sounds/jump_sound.wav", false, 40);
     }
