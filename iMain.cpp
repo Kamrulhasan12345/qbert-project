@@ -341,7 +341,7 @@ void iAddHighScore(const char *name, int score) {
   }
 }
 
-bool checkHighScore(int score) {
+bool iCheckHighScore(int score) {
   if (numHighScore < 10) {
     return true;
   }
@@ -838,7 +838,7 @@ void iGameOver() {
   snprintf(score, 50, "%d", world.player.score);
   iTextBold(380, 440, score);
   iSetColor(255, 255, 0);
-  if (checkHighScore(world.player.score)) {
+  if (iCheckHighScore(world.player.score)) {
     iSetColor(247, 233, 30);
     iTextBold(250, 380, "NEW HIGH SCORE!");
   }
@@ -864,7 +864,7 @@ void iLastScreen() {
   snprintf(score, 50, "%d", world.player.score);
   iTextBold(380, 440, score);
   iSetColor(255, 255, 0);
-  if (checkHighScore(world.player.score)) {
+  if (iCheckHighScore(world.player.score)) {
     iSetColor(247, 233, 30);
     iTextBold(250, 380, "NEW HIGH SCORE!");
   }
@@ -1122,31 +1122,6 @@ void iEnemyStep() {
           world.player.km.jump.active ? world.player.km.jump.to : world.player.km.pos);
       break;
     }
-    case ENEMY_SAM: {
-      int sequence[4] = {2, 1, 3, 0};
-      switch (world.enemies[i].km.la) {
-      case LOOK_LEFT:
-        sequence[1] = 3, sequence[2] = 0, sequence[3] = 1;
-        break;
-      case LOOK_RIGHT:
-        // keep it as it is
-        break;
-      case LOOK_UP:
-        sequence[0] = 1, sequence[1] = 3, sequence[2] = 0, sequence[3] = 2;
-        break;
-      case LOOK_DOWN:
-        sequence[2] = 0, sequence[3] = 3;
-        break;
-      default:
-        break;
-      }
-      for (int j = 0; j < 4; j++) {
-        pos = iPositionFinder(dirs[sequence[j]], world.enemies[i].km.pos);
-        if (~(int)(pos.x))
-          break;
-      }
-      break;
-    }
     case ENEMY_UGG: {
       int sequence[4] = {3, 1, 2, 0};
       switch (world.enemies[i].km.la) {
@@ -1174,6 +1149,32 @@ void iEnemyStep() {
       }
       break;
     }
+    case ENEMY_SAM: 
+    // {
+    //   int sequence[4] = {2, 1, 3, 0};
+    //   switch (world.enemies[i].km.la) {
+    //   case LOOK_LEFT:
+    //     sequence[1] = 3, sequence[2] = 0, sequence[3] = 1;
+    //     break;
+    //   case LOOK_RIGHT:
+    //     // keep it as it is
+    //     break;
+    //   case LOOK_UP:
+    //     sequence[0] = 1, sequence[1] = 3, sequence[2] = 0, sequence[3] = 2;
+    //     break;
+    //   case LOOK_DOWN:
+    //     sequence[2] = 0, sequence[3] = 3;
+    //     break;
+    //   default:
+    //     break;
+    //   }
+    //   for (int j = 0; j < 4; j++) {
+    //     pos = iPositionFinder(dirs[sequence[j]], world.enemies[i].km.pos);
+    //     if (~(int)(pos.x))
+    //       break;
+    //   }
+    //   break;
+    // }
     case ENEMY_WRONGWAY:
     default: {
       // random enemy ai
@@ -1692,7 +1693,7 @@ void iKeyPress(unsigned char key) {
     switch (key) {
     case '\r':
       if (strlen(playername) > 0) {
-        if (checkHighScore(world.player.score)) {
+        if (iCheckHighScore(world.player.score)) {
           iAddHighScore(playername, world.player.score);
         }
         memset(playername, 0, sizeof(playername));
