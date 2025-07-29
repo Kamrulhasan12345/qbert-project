@@ -424,7 +424,6 @@ void iLoadLevel(int level) {
              &gameLevel.player.km.pos.z);
     } else if (!strncmp(line, "TARGET", 6)) {
       sscanf(line, "TARGET %d", &gameLevel.target_idx);
-      printf("%d", gameLevel.target_idx);
     } else if (!strncmp(line, "WORLD", 5))
       mode = 0;
     else if (!strncmp(line, "ENEMY", 5))
@@ -486,9 +485,7 @@ void iLoadLevel(int level) {
   }
   fclose(fp);
   // copy everything to global world
-  printf("%d\n", gameLevel.target_idx);
   world = gameLevel;
-  printf("%d\n", world.target_idx);
 
   iLoadBlocks();
   iLoadEnemies();
@@ -1117,7 +1114,6 @@ void iEnemyStep() {
   if (win_cond)
     return;
   for (int i = 0; i < world.enemy_count; i++) {
-    printf("%d\n", world.enemies[i].type);
     position_t pos;
     switch (world.enemies[i].type) {
     case ENEMY_COILY: {
@@ -1777,12 +1773,8 @@ void iSpecialKeyPress(unsigned char key) {
       } else if (world.tiles[(int)target.y][(int)target.x][(int)target.z].state ==
                      world.states_count - 1 &&
                  world.level_num >= 3) {
-        printf("%d %d\n", world.tiles[(int)target.y][(int)target.x][(int)target.z].state,
-               world.level_num);
         world.tiles[(int)target.y][(int)target.x][(int)target.z].state--;
         world.player.score -= 25;
-        printf("%d %d\n", world.tiles[(int)target.y][(int)target.x][(int)target.z].state,
-               world.level_num);
       }
       sound_3 = iPlaySound("assets/sounds/jump_sound.wav", false, 30);
     }
