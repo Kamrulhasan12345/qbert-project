@@ -105,9 +105,6 @@ Q\*bert is a classic arcade game reimplemented in C++ using OpenGL and GLUT. Thi
 ### Controls
 
 - **Arrow Keys**: Move Q\*bert around the pyramid
-- **Space**: Jump/Confirm selection
-- **ESC**: Pause game or return to menu
-- **Enter**: Start game or confirm selection
 
 ### Objective
 
