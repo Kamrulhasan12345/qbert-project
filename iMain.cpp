@@ -22,6 +22,12 @@ Image *qbert_looker;
 #define MAX_STATES 3
 #define ESC 0x1b
 
+#define tiles(x, y, z)                                                                             \
+  world.tiles[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
+#define visited(x, y, z)                                                                           \
+  visited[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
+#define prev(x, y, z) prev[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
+
 typedef enum {
   STATE_MENU,
   STATE_GAME,
@@ -61,18 +67,22 @@ typedef enum { ENEMY_COILY, ENEMY_UGG, ENEMY_WRONGWAY, ENEMY_SAM, ENEMY_RED } en
 
 typedef struct {
   double x, y, z;
-} position_t;
+} vec3_t;
 
 typedef struct {
-  position_t from;
-  position_t to;
+  double x, y;
+} vec2_t;
+
+typedef struct {
+  vec3_t from;
+  vec3_t to;
   float t, duration;
   bool active;
 } jumper_t;
 
 typedef struct {
   jumper_t jump;
-  position_t pos;
+  vec3_t pos;
   look_t la;
 } body_t;
 
@@ -91,7 +101,7 @@ typedef struct {
 
 typedef struct {
   object_t type;
-  position_t pos;
+  vec3_t pos;
   uint8_t flags;
   void *ref;
 } drawqueue_t;
@@ -107,7 +117,7 @@ typedef struct {
   enemy_t enemies[MAX_ENEMIES];
   uint8_t enemy_count;
   player_t player;
-  tile_t tiles[MAX_SIZE][MAX_SIZE][MAX_SIZE];
+  tile_t tiles[MAX_SIZE * MAX_SIZE * MAX_SIZE];
 } world_t;
 
 world_t world;
@@ -140,8 +150,9 @@ int cheat = 0;
 
 double start_x = width / 2.0;
 double start_y = height * 0.9;
-double tile_width = 40;
-double tile_height = 40;
+double tile_width = 1;
+double tile_height = 1;
+double unit = 40;
 
 bool sound1 = true, sound2 = false, sound3 = false;
 bool selected_yes = true;
@@ -205,7 +216,7 @@ color_t sam = {.r = 10, .g = 255, .b = 200};
 //     {.r = 86, .g = 70, .b = 239}, {.r = 222, .g = 222, .b = 0}, {.r = 20, .g = 200, .b = 239}};
 // color_t l_color = {.r = 86, .g = 169, .b = 152}, r_color = {.r = 49, .g = 70, .b = 70};
 
-position_t dirs[4] = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}};
+vec3_t dirs[4] = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}};
 
 // int states_count = 3;
 
@@ -215,6 +226,12 @@ int cmp_dk(const void *a, const void *b) {
   int d1 = A->pos.x + A->pos.z + (MAX_SIZE - 1 - A->pos.y) + A->type;
   int d2 = B->pos.x + B->pos.z + (MAX_SIZE - 1 - B->pos.y) + B->type;
   return (d1 > d2) - (d1 < d2);
+}
+
+vec2_t iProjection(vec3_t pos, vec2_t offset) {
+  return {.x = start_x + (pos.z - pos.x) * unit * tile_width * cos(PI / 6) + offset.x,
+          .y = start_y - (pos.z + pos.x) * unit * tile_width / 2 - pos.y * unit * tile_height +
+               offset.y};
 }
 
 void iLoadResource() {
@@ -374,18 +391,18 @@ void iLoadEnemies() {
 void iLoadBlocks() {
   for (int i = 0; i < world.blocks_count; i++) {
     int x = world.blocks[i][0], y = world.blocks[i][1], z = world.blocks[i][2];
-    world.tiles[y][x][z].valid = true;
-    world.tiles[y][x][z].state = 0;
+    tiles(x, y, z).valid = true;
+    tiles(x, y, z).state = 0;
   }
   int i, j = 0;
   for (int y = MAX_SIZE - 1; ~y; --y) {
     for (int x = MAX_SIZE - 1; ~x; --x) {
       for (int z = MAX_SIZE - 1; ~z; --z) {
-        if (!world.tiles[y][x][z].valid)
+        if (!tiles(x, y, z).valid)
           continue;
         if (y > 0) {
           for (i = y - 1; ~i; --i)
-            if (world.tiles[i][x][z].valid)
+            if (tiles(x, i, z).valid)
               break;
           if (~i)
             continue;
@@ -552,34 +569,42 @@ void iAnimSetting() {
 }
 
 void iTile(double x, double y) {
-  double x_coords[] = {x, x + tile_width * cos(PI / 6), x, x - tile_width * cos(PI / 6)};
-  double y_coords[] = {y, y - tile_width / 2, y - tile_width, y - tile_width / 2};
+  double x_coords[] = {x, x + unit * tile_width * cos(PI / 6), x,
+                       x - unit * tile_width * cos(PI / 6)};
+  double y_coords[] = {y, y - unit * tile_width / 2, y - unit * tile_width,
+                       y - unit * tile_width / 2};
   iFilledPolygon(x_coords, y_coords, 4);
 }
 
 void iTileOutline(double x, double y) {
-  double x_coords[] = {x, x + tile_width * cos(PI / 6), x, x - tile_width * cos(PI / 6)};
-  double y_coords[] = {y, y - tile_width / 2, y - tile_width, y - tile_width / 2};
+  double x_coords[] = {x, x + unit * tile_width * cos(PI / 6), x,
+                       x - unit * tile_width * cos(PI / 6)};
+  double y_coords[] = {y, y - unit * tile_width / 2, y - unit * tile_width,
+                       y - unit * tile_width / 2};
   iPolygon(x_coords, y_coords, 4);
 }
 
 void iSide(double x, double y) {
-  double x_coords[] = {x, x, x + tile_width * cos(PI / 6), x + tile_width * cos(PI / 6)};
-  double y_coords[] = {y - tile_width, y - tile_width - tile_height,
-                       y - tile_width / 2 - tile_height, y - tile_width / 2};
+  double x_coords[] = {x, x, x + unit * tile_width * cos(PI / 6),
+                       x + unit * tile_width * cos(PI / 6)};
+  double y_coords[] = {y - unit * tile_width, y - unit * tile_width - unit * tile_height,
+                       y - unit * tile_width / 2 - unit * tile_height, y - unit * tile_width / 2};
   iSetColor(world.r_color.r, world.r_color.g, world.r_color.b);
   iFilledPolygon(x_coords, y_coords, 4);
-  x_coords[2] = x - tile_width * cos(PI / 6), x_coords[3] = x - tile_width * cos(PI / 6);
+  x_coords[2] = x - unit * tile_width * cos(PI / 6),
+  x_coords[3] = x - unit * tile_width * cos(PI / 6);
   iSetColor(world.l_color.r, world.l_color.g, world.l_color.b);
   iFilledPolygon(x_coords, y_coords, 4);
 }
 
 void iSideOutline(double x, double y) {
-  double x_coords[] = {x, x, x + tile_width * cos(PI / 6), x + tile_width * cos(PI / 6)};
-  double y_coords[] = {y - tile_width, y - tile_width - tile_height,
-                       y - tile_width / 2 - tile_height, y - tile_width / 2};
+  double x_coords[] = {x, x, x + unit * tile_width * cos(PI / 6),
+                       x + unit * tile_width * cos(PI / 6)};
+  double y_coords[] = {y - unit * tile_width, y - unit * tile_width - unit * tile_height,
+                       y - unit * tile_width / 2 - unit * tile_height, y - unit * tile_width / 2};
   iPolygon(x_coords, y_coords, 4);
-  x_coords[2] = x - tile_width * cos(PI / 6), x_coords[3] = x - tile_width * cos(PI / 6);
+  x_coords[2] = x - unit * tile_width * cos(PI / 6),
+  x_coords[3] = x - unit * tile_width * cos(PI / 6);
   iPolygon(x_coords, y_coords, 4);
 }
 
@@ -603,12 +628,9 @@ void iDrawEnemy(enemy_t *enemy) {
     enemy_sprite = &ball1;
     break;
   }
-  // printf("%d %d
-  // %d\n",(int)enemy->km.pos.x,(int)enemy->km.pos.y,(int)enemy->km.pos.z);
-  iShowLoadedImage(start_x + (enemy->km.pos.z - enemy->km.pos.x) * tile_width * cos(PI / 6),
-                   start_y - (enemy->km.pos.z + enemy->km.pos.x) * tile_width / 2 -
-                       enemy->km.pos.y * tile_height - tile_width / 2,
-                   enemy_sprite);
+  vec2_t screenPos =
+      iProjection(enemy->km.pos, {.x = -unit * tile_width / 4, .y = -unit * tile_width / 2});
+  iShowLoadedImage(screenPos.x, screenPos.y, enemy_sprite);
 }
 
 bool iPECollision(enemy_t *enemy) {
@@ -628,11 +650,11 @@ void iDrawQueue() {
   for (int y = MAX_SIZE - 1; y >= 0; y--) {
     for (int x = 0; x < MAX_SIZE; x++) {
       for (int z = 0; z < MAX_SIZE; z++) {
-        if (!world.tiles[y][x][z].valid)
+        if (!tiles(x, y, z).valid)
           continue;
         drawqueue[i].pos.x = x, drawqueue[i].pos.y = y, drawqueue[i].pos.z = z;
-        drawqueue[i].flags = world.tiles[y][x][z].state;
-        drawqueue[i].ref = &world.tiles[y][x][z];
+        drawqueue[i].flags = tiles(x, y, z).state;
+        drawqueue[i].ref = &tiles(x, y, z);
         drawqueue[i++].type = TYPE_BLOCK;
       }
     }
@@ -660,20 +682,17 @@ void iDrawQueue() {
     double x = drawqueue[j].pos.x, y = drawqueue[j].pos.y, z = drawqueue[j].pos.z;
     switch (drawqueue[j].type) {
     case TYPE_BLOCK: {
+      vec2_t screenPos = iProjection({.x = x, .y = y, .z = z}, {0});
       if (!editor.wireframe) {
-        iSetColor(world.states[world.tiles[(int)y][(int)x][(int)z].state % world.states_count].r,
-                  world.states[world.tiles[(int)y][(int)x][(int)z].state % world.states_count].g,
-                  world.states[world.tiles[(int)y][(int)x][(int)z].state % world.states_count].b);
-        iTile(start_x + (z - x) * tile_width * cos(PI / 6),
-              start_y - (z + x) * tile_width / 2 - y * tile_height);
-        iSide(start_x + (z - x) * tile_width * cos(PI / 6),
-              start_y - (z + x) * tile_width / 2 - y * tile_height);
+        iSetColor(world.states[tiles(x, y, z).state % world.states_count].r,
+                  world.states[tiles(x, y, z).state % world.states_count].g,
+                  world.states[tiles(x, y, z).state % world.states_count].b);
+        iTile(screenPos.x, screenPos.y);
+        iSide(screenPos.x, screenPos.y);
       } else {
         iSetColor(world.r_color.r, world.r_color.g, world.r_color.b);
-        iTileOutline(start_x + (z - x) * tile_width * cos(PI / 6),
-                     start_y - (z + x) * tile_width / 2 - y * tile_height);
-        iSideOutline(start_x + (z - x) * tile_width * cos(PI / 6),
-                     start_y - (z + x) * tile_width / 2 - y * tile_height);
+        iTileOutline(screenPos.x, screenPos.y);
+        iSideOutline(screenPos.x, screenPos.y);
       }
       break;
     }
@@ -688,11 +707,9 @@ void iDrawQueue() {
       } else if (world.player.km.la == 3) {
         qbert_looker = &qbert_down;
       }
-      iShowLoadedImage(start_x + (z - x) * tile_width * cos(PI / 6),
-                       start_y - (z + x) * tile_width / 2 - y * tile_height - tile_width / 2,
-                       qbert_looker);
-      iSetColor(240, 10, 10);
-      // iFilledCircle(start_x+(z-x)*a*cos(PI/6),start_y-(z+x)*a/2-y*a-a/2,a/3);
+      vec2_t screenPos = iProjection(world.player.km.pos,
+                                     {.x = -unit * tile_width / 4, .y = -unit * tile_width / 2});
+      iShowLoadedImage(screenPos.x, screenPos.y, qbert_looker);
       break;
     }
     case TYPE_ENEMY: {
@@ -707,12 +724,13 @@ void iDrawQueue() {
 
 void iGrid() {
   double c = start_x / sqrt(3) + start_y +
-             ((int)((width - start_x) / sqrt(3) + height - start_y)) * tile_height;
+             ((int)((width - start_x) / sqrt(3) + height - start_y)) * unit * tile_height;
   iSetTransparentColor(255, 255, 255, 0.25);
-  for (; c >= 0; c -= tile_width)
+  for (; c >= 0; c -= unit * tile_width)
     iLine(0, c, width, -width / sqrt(3) + c);
-  c = start_y - start_x / sqrt(3) + ((int)(height - start_y + start_x / sqrt(3))) * tile_height;
-  for (; width / sqrt(3) + c >= 0; c -= tile_width)
+  c = start_y - start_x / sqrt(3) +
+      ((int)(height - start_y + start_x / sqrt(3))) * unit * tile_height;
+  for (; width / sqrt(3) + c >= 0; c -= unit * tile_width)
     iLine(0, c, width, width / sqrt(3) + c);
 }
 
@@ -997,28 +1015,28 @@ void iLoseLife() {
   }
 }
 
-int iBodyMove(position_t pos, body_t *km) {
+int iBodyMove(vec3_t pos, body_t *km) {
   int x = pos.x, y = pos.y, z = pos.z;
   if (!(x >= 0 && x < MAX_SIZE && y >= 0 && y < MAX_SIZE && z >= 0 && z < MAX_SIZE)) {
     // die and reset
     // printf("so, %d %d %d is invalid\n",x,y,z);
     return 0;
   }
-  if ((y - 1 >= 0 && world.tiles[y - 1][x][z].valid) && 1) {
+  if ((y - 1 >= 0 && tiles(x, y - 1, z).valid) && 1) {
     // printf("so, up?\n");
     // we are using y-2 check here only for the uppest block since if we are at y = 1, we must be
     // able to move up regardless of y-2's appeareance since y-2 cant be present in this case
-    if (y - 2 >= -1 && !world.tiles[y - 2][x][z].valid) {
+    if (y - 2 >= -1 && !tiles(x, y - 2, z).valid) {
       // printf("so, up one block actually?\n");
       x = x, z = z, y = y - 1;
       // printf("%lf %lf %lf\n",km->pos.x,km->pos.y,km->pos.z);
     }
     // then go, otherwise stay where you are
-  } else if (world.tiles[y][x][z].valid) {
+  } else if (tiles(x, y, z).valid) {
     // simply walk to this one, with no jump anim
     // printf("so walk straight?\n");
     x = x, y = y, z = z;
-  } else if (y + 1 <= MAX_SIZE && world.tiles[y + 1][x][z].valid) {
+  } else if (y + 1 <= MAX_SIZE && tiles(x, y + 1, z).valid) {
     // then move to this one, still a jump anim
     // printf("so down one block?\n");
     x = x, z = z, y = y + 1;
@@ -1037,34 +1055,34 @@ int iBodyMove(position_t pos, body_t *km) {
   return 1;
 }
 
-position_t iPositionFinder(position_t dir, position_t pos) {
+vec3_t iPositionFinder(vec3_t dir, vec3_t pos) {
   int x = pos.x + dir.x;
   int y = pos.y + dir.y;
   int z = pos.z + dir.z;
-  if (y - 1 >= 0 && world.tiles[y - 1][x][z].valid) {
-    if (y - 2 == -1 || (y - 2 >= 0 && !world.tiles[y - 2][x][z].valid)) {
-      return (position_t){.x = 1. * x, .y = 1. * y - 1, .z = 1. * z};
+  if (y - 1 >= 0 && tiles(x, y - 1, z).valid) {
+    if (y - 2 == -1 || (y - 2 >= 0 && !tiles(x, y - 2, z).valid)) {
+      return (vec3_t){.x = 1. * x, .y = 1. * y - 1, .z = 1. * z};
     }
-  } else if (world.tiles[y][x][z].valid)
-    return (position_t){.x = 1. * x, .y = 1. * y, .z = 1. * z};
-  else if (y + 1 < MAX_SIZE && world.tiles[y + 1][x][z].valid)
-    return (position_t){.x = 1. * x, .y = 1. * y + 1, .z = 1. * z};
-  return (position_t){.x = -1, .y = -1, .z = -1};
+  } else if (tiles(x, y, z).valid)
+    return (vec3_t){.x = 1. * x, .y = 1. * y, .z = 1. * z};
+  else if (y + 1 < MAX_SIZE && tiles(x, y + 1, z).valid)
+    return (vec3_t){.x = 1. * x, .y = 1. * y + 1, .z = 1. * z};
+  return (vec3_t){.x = -1, .y = -1, .z = -1};
 }
 
-position_t iGetNextStep(position_t s, position_t e) {
+vec3_t iGetNextStep(vec3_t s, vec3_t e) {
   int i, j;
 
-  bool visited[MAX_SIZE][MAX_SIZE][MAX_SIZE] = {{{0}}};
-  visited[(int)s.y][(int)s.x][(int)s.z] = 1;
+  bool visited[MAX_SIZE * MAX_SIZE * MAX_SIZE] = {0};
+  visited(s.x, s.y, s.z) = 1;
 
-  position_t prev[MAX_SIZE][MAX_SIZE][MAX_SIZE];
+  vec3_t prev[MAX_SIZE * MAX_SIZE * MAX_SIZE];
   for (int j = 0; j < MAX_SIZE; j++)
     for (int k = 0; k < MAX_SIZE; k++)
       for (int l = 0; l < MAX_SIZE; l++)
-        prev[j][k][l] = {.x = -1, .y = -1, .z = -1};
+        prev(k, j, l) = {.x = -1, .y = -1, .z = -1};
 
-  position_t queue[MAX_SIZE * MAX_SIZE * MAX_SIZE];
+  vec3_t queue[MAX_SIZE * MAX_SIZE * MAX_SIZE];
   for (int j = 0; j < MAX_SIZE * MAX_SIZE * MAX_SIZE; j++)
     queue[j] = {.x = -1, .y = -1, .z = -1};
   i = j = 0;
@@ -1074,25 +1092,24 @@ position_t iGetNextStep(position_t s, position_t e) {
   while (~(int)queue[i].x) {
     // printf("%d queue: %g, %g, %g\n", i, queue[i].x, queue[i].y, queue[i].z);
     for (int k = 0; k < 4; k++) {
-      position_t n = iPositionFinder(dirs[k], queue[i]);
-      if (~(int)n.x && !visited[(int)n.y][(int)n.x][(int)n.z]) {
+      vec3_t n = iPositionFinder(dirs[k], queue[i]);
+      if (~(int)n.x && !visited(n.x, n.y, n.z)) {
         // printf("%d %d: %g %g %g\n", i, j + 1, n.x, n.y, n.z);
         queue[j++] = {.x = n.x, .y = n.y, .z = n.z};
         // printf("%d queue: %g, %g, %g\n", j - 1, queue[j - 1].x, queue[j - 1].y, queue[i].z);
-        visited[(int)n.y][(int)n.x][(int)n.z] = 1;
-        prev[(int)n.y][(int)n.x][(int)n.z] = {.x = queue[i].x, .y = queue[i].y, .z = queue[i].z};
+        visited(n.x, n.y, n.z) = 1;
+        prev(n.x, n.y, n.z) = {.x = queue[i].x, .y = queue[i].y, .z = queue[i].z};
       }
       // printf("\n");
     }
     i++;
   }
-  position_t path[MAX_SIZE * MAX_SIZE * MAX_SIZE];
+  vec3_t path[MAX_SIZE * MAX_SIZE * MAX_SIZE];
   i = 0;
   // printf("Path: \n");
-  for (position_t at = {.x = e.x, .y = e.y, .z = e.z}; ~(int)at.x;
-       at = {.x = prev[(int)at.y][(int)at.x][(int)at.z].x,
-             .y = prev[(int)at.y][(int)at.x][(int)at.z].y,
-             .z = prev[(int)at.y][(int)at.x][(int)at.z].z})
+  for (vec3_t at = {.x = e.x, .y = e.y, .z = e.z}; ~(int)at.x; at = {.x = prev(at.x, at.y, at.z).x,
+                                                                     .y = prev(at.x, at.y, at.z).y,
+                                                                     .z = prev(at.x, at.y, at.z).z})
     /*printf("%d, %g %g %g\n", i, at.x, at.y, at.z), */ path[i++] = {
         .x = at.x, .y = at.y, .z = at.z};
 
@@ -1101,9 +1118,9 @@ position_t iGetNextStep(position_t s, position_t e) {
     // s.z); printf("printing all %d\n", i);
     for (int j = 0; j < i; j++)
       // printf("%g %g %g\n", path[j].x, path[j].y, path[j].z);
-      return (position_t){.x = path[i - 2].x, .y = path[i - 2].y, .z = path[i - 2].z};
+      return (vec3_t){.x = path[i - 2].x, .y = path[i - 2].y, .z = path[i - 2].z};
   }
-  return (position_t){.x = path[i - 1].x, .y = path[i - 1].y, .z = path[i - 1].z};
+  return (vec3_t){.x = path[i - 1].x, .y = path[i - 1].y, .z = path[i - 1].z};
 }
 
 void iEnemyStep() {
@@ -1114,7 +1131,7 @@ void iEnemyStep() {
   if (win_cond)
     return;
   for (int i = 0; i < world.enemy_count; i++) {
-    position_t pos;
+    vec3_t pos;
     switch (world.enemies[i].type) {
     case ENEMY_COILY: {
       pos = iGetNextStep(
@@ -1149,7 +1166,7 @@ void iEnemyStep() {
       }
       break;
     }
-    case ENEMY_SAM: 
+    case ENEMY_SAM:
     // {
     //   int sequence[4] = {2, 1, 3, 0};
     //   switch (world.enemies[i].km.la) {
@@ -1213,7 +1230,7 @@ void iCheckCompletion() {
   int i;
   for (i = 0; i < world.visible_count; i++) {
     int x = world.visible[i][0], y = world.visible[i][1], z = world.visible[i][2];
-    if (world.tiles[y][x][z].state != world.target_idx)
+    if (tiles(x, y, z).state != world.target_idx)
       break;
   }
   if (i >= world.visible_count) {
@@ -1762,19 +1779,18 @@ void iSpecialKeyPress(unsigned char key) {
         return;
       if (world.player.km.jump.active)
         return;
-      position_t target = iPositionFinder(dirs[dir], world.player.km.pos);
+      vec3_t target = iPositionFinder(dirs[dir], world.player.km.pos);
       if (target.x <= -1)
         return;
       world.player.km.la = (look_t)dir;
       iBodyMove(target, (body_t *)&world.player);
-      if (world.tiles[(int)target.y][(int)target.x][(int)target.z].state < world.states_count - 1) {
-        world.tiles[(int)target.y][(int)target.x][(int)target.z].state++;
-        world.tiles[(int)target.y][(int)target.x][(int)target.z].state %= world.states_count;
+      if (tiles(target.x, target.y, target.z).state < world.states_count - 1) {
+        tiles(target.x, target.y, target.z).state++;
+        tiles(target.x, target.y, target.z).state %= world.states_count;
         world.player.score += 25;
-      } else if (world.tiles[(int)target.y][(int)target.x][(int)target.z].state ==
-                     world.states_count - 1 &&
+      } else if (tiles(target.x, target.y, target.z).state == world.states_count - 1 &&
                  world.level_num >= 3) {
-        world.tiles[(int)target.y][(int)target.x][(int)target.z].state--;
+        tiles(target.x, target.y, target.z).state--;
         world.player.score -= 25;
       }
       sound_3 = iPlaySound("assets/sounds/jump_sound.wav", false, 30);
