@@ -16,10 +16,10 @@ Sprite snake, qbert_jump, qbert_spin, ball, qbert_inverse;
 Image *qbert_looker;
 
 #define PI 3.14159265
-#define MAX_SIZE 10
-#define MAX_BLOCKS 128
-#define MAX_ENEMIES 8
-#define MAX_STATES 3
+#define MAX_SIZE 8
+#define MAX_BLOCKS 512
+#define MAX_ENEMIES 7
+#define MAX_STATES 7
 #define ESC 0x1b
 
 #define tiles(x, y, z)                                                                             \
@@ -27,6 +27,12 @@ Image *qbert_looker;
 #define visited(x, y, z)                                                                           \
   visited[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
 #define prev(x, y, z) prev[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
+
+#define blocks(idx, c) ((world.blocks[idx] >> (4 * c)) & 0xf)
+#define visible(idx, c) ((world.visible[idx] >> (4 * c)) & 0xf)
+
+#define s_blocks(idx, x, y, z) world.blocks[idx] = (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8)
+#define s_visible(idx, x, y, z) world.visible[idx] = (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8)
 
 typedef enum {
   STATE_MENU,
@@ -57,8 +63,8 @@ typedef struct {
 } color_t;
 
 typedef struct {
-  bool valid;
-  int state;
+  uint8_t valid : 1;
+  uint8_t state : 7;
 } tile_t;
 
 typedef enum { LOOK_LEFT, LOOK_RIGHT, LOOK_UP, LOOK_DOWN } look_t;
@@ -74,8 +80,7 @@ typedef struct {
 } vec2_t;
 
 typedef struct {
-  vec3_t from;
-  vec3_t to;
+  vec3_t from, to;
   float t, duration;
   bool active;
 } jumper_t;
@@ -88,10 +93,9 @@ typedef struct {
 
 typedef struct {
   body_t km;
-  int lives;
-  int max_lives;
-  int score;
-  bool ko;
+  uint8_t lives : 4;
+  uint8_t max_lives : 4;
+  short score;
 } player_t;
 
 typedef struct {
@@ -107,17 +111,17 @@ typedef struct {
 } drawqueue_t;
 
 typedef struct {
-  double blocks[MAX_BLOCKS][3];
-  int blocks_count;
-  double visible[MAX_BLOCKS][3];
-  int visible_count;
-  int level_num, states_count, target_idx;
-  color_t states[MAX_STATES];
-  color_t l_color, r_color;
-  enemy_t enemies[MAX_ENEMIES];
-  uint8_t enemy_count;
-  player_t player;
   tile_t tiles[MAX_SIZE * MAX_SIZE * MAX_SIZE];
+  uint16_t blocks[MAX_BLOCKS];
+  uint16_t visible[MAX_BLOCKS];
+  color_t states[MAX_STATES];
+  enemy_t enemies[MAX_ENEMIES];
+  uint16_t blocks_count;
+  uint16_t visible_count;
+  uint8_t level_num : 7, states_count : 3, target_idx : 3;
+  uint8_t enemy_count : 3;
+  color_t l_color, r_color;
+  player_t player;
 } world_t;
 
 world_t world;
@@ -163,50 +167,6 @@ bool hover_start = false, hover_resume = false, hover_setting = false, hover_hel
 bool hover_credits = false, hover_exit = false, end_game = false;
 bool entername = false, show_highscore = false;
 bool level_completed = false, cheat_on = false, win_cond = false;
-
-// double blocksPos3d[][3] = {{7, 7, 0},
-//                            {6, 7, 1},
-//                            {5, 7, 2},
-//                            {4, 7, 3},
-//                            {3, 7, 4},
-//                            {2, 7, 5},
-//                            {1, 7, 6},
-//                            {0, 7, 7},
-//                            {6, 6, 0},
-//                            {5, 6, 1},
-//                            {4, 6, 2},
-//                            {3, 6, 3},
-//                            {2, 6, 4},
-//                            {1, 6, 5},
-//                            {0, 6, 6},
-//                            {5, 5, 0},
-//                            {4, 5, 1},
-//                            {3, 5, 2},
-//                            {2, 5, 3},
-//                            {1, 5, 4},
-//                            {0, 5, 5},
-//                            {4, 4, 0},
-//                            {3, 4, 1},
-//                            {2, 4, 2},
-//                            {1, 4, 3},
-//                            {0, 4, 4},
-//                            {3, 3, 0},
-//                            {2, 3, 1},
-//                            {1, 3, 2},
-//                            {0, 3, 3},
-//                            {2, 2, 0},
-//                            {1, 2, 1},
-//                            {0, 2, 2},
-//                            {1, 1, 0},
-//                            {0, 1, 1},
-//                            {0, 0, 0},
-//                            {0, 0, 1},
-//                            {1, 4, 4},
-//                            // {2,3,5}
-//                            // {5,4,3},
-//                            {4, 5, 2},
-//                            {3, 7, 5}};
-// int n = sizeof(blocksPos3d) / sizeof(blocksPos3d[0]);
 
 color_t coily = {.r = 10, .g = 100, .b = 240};
 color_t ugg = {.r = 100, .g = 200, .b = 150};
@@ -366,6 +326,7 @@ bool iCheckHighScore(int score) {
 }
 
 void iLoadPlayer(bool initialized) {
+  printf("Loading player.\n");
   world.player.km.jump.active = 0;
   world.player.km.jump.duration = 250;
   world.player.km.jump.t = 0;
@@ -375,23 +336,31 @@ void iLoadPlayer(bool initialized) {
   if (initialized) {
     printf("Setting score to zero.\n"), world.player.score = 0;
   }
-  world.player.ko = true;
+  printf("Done loading player.\n");
 }
 
 void iLoadEnemies() {
+  printf("Started setting enemies.\n");
   for (int i = 0; i < world.enemy_count; i++) {
+    printf("Got enemy %d.\n", i);
     int idx = rand() % world.visible_count;
-    world.enemies[i].km.pos.x = world.visible[idx][0],
-    world.enemies[i].km.pos.y = world.visible[idx][1],
-    world.enemies[i].km.pos.z = world.visible[idx][2];
+    printf("%d\n", world.visible[idx]);
+    world.enemies[i].km.pos.x = (float)visible(idx, 0);
+    world.enemies[i].km.pos.y = (float)visible(idx, 1);
+    world.enemies[i].km.pos.z = (float)visible(idx, 2);
     world.enemies[i].km.jump.duration = 100;
     world.enemies[i].km.jump.t = 0;
+    printf("Done with enemy %d.\n", i);
   }
+  printf("Done loading enemies.\n");
 }
 
 void iLoadBlocks() {
   for (int i = 0; i < world.blocks_count; i++) {
-    int x = world.blocks[i][0], y = world.blocks[i][1], z = world.blocks[i][2];
+    int x = blocks(i, 0);
+    int y = blocks(i, 1);
+    int z = blocks(i, 2);
+    printf("Getting blocks: %d %d %d %d\n", world.blocks[i], x, y, z);
     tiles(x, y, z).valid = true;
     tiles(x, y, z).state = 0;
   }
@@ -408,10 +377,13 @@ void iLoadBlocks() {
           if (~i)
             continue;
         }
-        world.visible[j][0] = 1. * x, world.visible[j][1] = 1. * y, world.visible[j++][2] = 1. * z;
+        printf("Setting visible. %d\n", world.visible[j]);
+        s_visible(j, x, y, z);
+        j++;
       }
     }
   }
+  printf("Done setting visible. %d\n", j);
   world.visible_count = j;
 }
 
@@ -427,6 +399,8 @@ void iLoadLevel(int level) {
   char line[128];
   char filePath[50];
 
+  printf("Loading Level\n");
+
   snprintf(filePath, 50, "./saves/levels/level%d.txt", level);
   fp = fopen(filePath, "r");
   if (fp == NULL) {
@@ -436,32 +410,44 @@ void iLoadLevel(int level) {
 
   while (fgets(line, sizeof(line), fp) != NULL) {
     if (!strncmp(line, "LEVEL", 5)) {
-      sscanf(line, "LEVEL %d", &gameLevel.level_num);
+      printf("Getting level.\n");
+      unsigned char level;
+      sscanf(line, "LEVEL %d", &level);
+      gameLevel.level_num = level;
     } else if (!strncmp(line, "START", 5)) {
+      printf("Getting start.\n");
       int x, y, z;
       sscanf(line, "START %d %d %d", &x, &y, &z);
       gameLevel.player.km.pos = {.x = 1. * x, .y = 1. * y, .z = 1. * z};
     } else if (!strncmp(line, "TARGET", 6)) {
-      sscanf(line, "TARGET %d", &gameLevel.target_idx);
-    } else if (!strncmp(line, "WORLD", 5))
+      printf("Getting target.\n");
+      unsigned char idx;
+      sscanf(line, "TARGET %d", &idx);
+      gameLevel.target_idx = idx;
+    } else if (!strncmp(line, "WORLD", 5)) {
+      printf("Set mode = 0\n");
       mode = 0;
-    else if (!strncmp(line, "ENEMY", 5))
-      mode = 1;
-    else if (!strncmp(line, "STATES", 6))
+    } else if (!strncmp(line, "ENEMY", 5)) {
+      printf("Set mode = 1.\n"), mode = 1;
+    } else if (!strncmp(line, "STATES", 6)) {
+      printf("Set mode = 2.\n");
       mode = 2;
-    else if (!strncmp(line, "SIDES", 5))
+    } else if (!strncmp(line, "SIDES", 5)) {
+      printf("Set mode = 3.\n");
       mode = 3;
-    else if (!strncmp(line, "//", 2))
+    } else if (!strncmp(line, "//", 2)) {
+      printf("Found comment.\n");
       continue;
-    else {
+    } else {
       switch (mode) {
       case 0: {
         int x, y, z;
         if (sscanf(line, "%d %d %d", &x, &y, &z) == 3) {
+          printf("Got coords for blocks. %d %d %d. %d\n", x & 0xf, y, z,
+                 (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8));
           if (gameLevel.blocks_count < MAX_BLOCKS) {
-            gameLevel.blocks[gameLevel.blocks_count][0] = 1. * x,
-            gameLevel.blocks[gameLevel.blocks_count][1] = 1. * y,
-            gameLevel.blocks[gameLevel.blocks_count][2] = 1. * z;
+            gameLevel.blocks[gameLevel.blocks_count] =
+                (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8);
             gameLevel.blocks_count++;
           }
         }
@@ -471,6 +457,7 @@ void iLoadLevel(int level) {
         int enemy_idx;
         int x, y, z;
         if (sscanf(line, "%d %f %f %f", &enemy_idx, &x, &y, &z) == 4) {
+          printf("Got coords for enemies.\n");
           if (gameLevel.enemy_count < MAX_ENEMIES) {
             gameLevel.enemies[gameLevel.enemy_count++] = {
                 .km = {.jump = {0},
@@ -484,6 +471,7 @@ void iLoadLevel(int level) {
       case 2: {
         int r, g, b;
         if (sscanf(line, "%d %d %d", &r, &g, &b) == 3) {
+          printf("Got colors for states.\n");
           if (gameLevel.states_count < MAX_STATES) {
             gameLevel.states[gameLevel.states_count++] = {
                 .r = (uint8_t)r, .g = (uint8_t)g, .b = (uint8_t)b};
@@ -492,6 +480,7 @@ void iLoadLevel(int level) {
         break;
       }
       case 3: {
+        printf("Got l_color, r_color.\n");
         sscanf(line, "%d %d %d %d %d %d %d %d", &gameLevel.l_color.r, &gameLevel.l_color.g,
                &gameLevel.l_color.b, &gameLevel.l_color.a, &gameLevel.r_color.r,
                &gameLevel.r_color.g, &gameLevel.r_color.b, &gameLevel.r_color.a);
@@ -504,12 +493,14 @@ void iLoadLevel(int level) {
   }
   fclose(fp);
   // copy everything to global world
+  printf("Copying gameLevel to world.\n");
   world = gameLevel;
   printf("%g %g %g\n", world.player.km.pos.x, world.player.km.pos.y, world.player.km.pos.z);
 
   iLoadBlocks();
   iLoadEnemies();
   iLoadPlayer(false);
+  printf("Done loading level.\n");
 }
 
 void iPrintWorld(world_t *world) {
@@ -1011,9 +1002,9 @@ void iLoseLife() {
     end_game = true;
   } else {
     int ind = rand() % world.visible_count;
-    world.player.km.pos.x = world.visible[ind][0];
-    world.player.km.pos.y = world.visible[ind][1];
-    world.player.km.pos.z = world.visible[ind][2];
+    world.player.km.pos.x = visible(ind, 0);
+    world.player.km.pos.y = visible(ind, 1);
+    world.player.km.pos.z = visible(ind, 2);
   }
 }
 
@@ -1061,14 +1052,17 @@ vec3_t iPositionFinder(vec3_t dir, vec3_t pos) {
   int x = pos.x + dir.x;
   int y = pos.y + dir.y;
   int z = pos.z + dir.z;
+  if (x < 0 || x >= MAX_SIZE || y < 0 || y >= MAX_SIZE || z < 0 || z >= MAX_SIZE)
+    return {.x = -1, .y = -1, .z = -1};
   if (y - 1 >= 0 && tiles(x, y - 1, z).valid) {
     if (y - 2 == -1 || (y - 2 >= 0 && !tiles(x, y - 2, z).valid)) {
       return (vec3_t){.x = 1. * x, .y = 1. * y - 1, .z = 1. * z};
     }
-  } else if (tiles(x, y, z).valid)
+  } else if (tiles(x, y, z).valid) {
     return (vec3_t){.x = 1. * x, .y = 1. * y, .z = 1. * z};
-  else if (y + 1 < MAX_SIZE && tiles(x, y + 1, z).valid)
+  } else if (y + 1 < MAX_SIZE && tiles(x, y + 1, z).valid) {
     return (vec3_t){.x = 1. * x, .y = 1. * y + 1, .z = 1. * z};
+  }
   return (vec3_t){.x = -1, .y = -1, .z = -1};
 }
 
@@ -1090,37 +1084,36 @@ vec3_t iGetNextStep(vec3_t s, vec3_t e) {
   i = j = 0;
   queue[j++] = {.x = s.x, .y = s.y, .z = s.z};
 
-  // printf("full tracer: \n");
+  printf("full tracer: \n");
   while (~(int)queue[i].x) {
-    // printf("%d queue: %g, %g, %g\n", i, queue[i].x, queue[i].y, queue[i].z);
+    printf("out: %d queue: %g, %g, %g\n", i, queue[i].x, queue[i].y, queue[i].z);
     for (int k = 0; k < 4; k++) {
       vec3_t n = iPositionFinder(dirs[k], queue[i]);
       if (~(int)n.x && !visited(n.x, n.y, n.z)) {
-        // printf("%d %d: %g %g %g\n", i, j + 1, n.x, n.y, n.z);
+        printf("%d %d: %g %g %g\n", i, j + 1, n.x, n.y, n.z);
         queue[j++] = {.x = n.x, .y = n.y, .z = n.z};
-        // printf("%d queue: %g, %g, %g\n", j - 1, queue[j - 1].x, queue[j - 1].y, queue[i].z);
+        printf("in: %d queue: %g, %g, %g\n", j - 1, queue[j - 1].x, queue[j - 1].y, queue[i].z);
         visited(n.x, n.y, n.z) = 1;
         prev(n.x, n.y, n.z) = {.x = queue[i].x, .y = queue[i].y, .z = queue[i].z};
       }
-      // printf("\n");
+      printf("\n");
     }
     i++;
   }
   vec3_t path[MAX_SIZE * MAX_SIZE * MAX_SIZE];
   i = 0;
-  // printf("Path: \n");
+  printf("Path: \n");
   for (vec3_t at = {.x = e.x, .y = e.y, .z = e.z}; ~(int)at.x; at = {.x = prev(at.x, at.y, at.z).x,
                                                                      .y = prev(at.x, at.y, at.z).y,
                                                                      .z = prev(at.x, at.y, at.z).z})
-    /*printf("%d, %g %g %g\n", i, at.x, at.y, at.z), */ path[i++] = {
-        .x = at.x, .y = at.y, .z = at.z};
+    printf("%d, %g %g %g\n", i, at.x, at.y, at.z), path[i++] = {.x = at.x, .y = at.y, .z = at.z};
 
   if (path[i - 1].x == s.x && path[i - 1].y == s.y && path[i - 1].z == s.z) {
-    // printf("\n%g %g %g\n\n%g %g %g\n", path[i - 1].x, path[i - 1].y, path[i - 1].z, s.x, s.y,
-    // s.z); printf("printing all %d\n", i);
+    printf("\n%g %g %g\n\n%g %g %g\n", path[i - 1].x, path[i - 1].y, path[i - 1].z, s.x, s.y, s.z);
+    printf("printing all %d\n", i);
     for (int j = 0; j < i; j++)
-      // printf("%g %g %g\n", path[j].x, path[j].y, path[j].z);
-      return (vec3_t){.x = path[i - 2].x, .y = path[i - 2].y, .z = path[i - 2].z};
+      printf("%g %g %g\n", path[j].x, path[j].y, path[j].z);
+    return (vec3_t){.x = path[i - 2].x, .y = path[i - 2].y, .z = path[i - 2].z};
   }
   return (vec3_t){.x = path[i - 1].x, .y = path[i - 1].y, .z = path[i - 1].z};
 }
@@ -1133,6 +1126,7 @@ void iEnemyStep() {
   if (win_cond)
     return;
   for (int i = 0; i < world.enemy_count; i++) {
+    printf("Started moving player.\n");
     vec3_t pos;
     switch (world.enemies[i].type) {
     case ENEMY_COILY: {
@@ -1215,8 +1209,7 @@ void iEnemyStep() {
       world.enemies[i].km.la = LOOK_UP;
     else if (dX == 1)
       world.enemies[i].km.la = LOOK_DOWN;
-    // printf("%d %g %g %g\n", world.enemies[i].km.la, world.enemies[i].km.pos.x,
-    //        world.enemies[i].km.pos.y, world.enemies[i].km.pos.z);
+    printf("Moving enemy.\n");
     iBodyMove(pos, (body_t *)&world.enemies[i]);
   }
 }
@@ -1231,7 +1224,7 @@ void iRestart() {
 void iCheckCompletion() {
   int i;
   for (i = 0; i < world.visible_count; i++) {
-    int x = world.visible[i][0], y = world.visible[i][1], z = world.visible[i][2];
+    int x = visible(i, 0), y = visible(i, 1), z = visible(i, 2);
     if (tiles(x, y, z).state != world.target_idx)
       break;
   }
@@ -1337,6 +1330,7 @@ void iGame() {
     world_timer = iSetTimer(dt, iWorldFwd);
   else
     iResumeTimer(world_timer);
+  printf("Done working with timers.\n");
   // now going to set a timer that will check if I have completed the level
   // drawqueue[i].pos.x=world.player.pos.x,drawqueue[i].pos.y=world.player.pos.y,drawqueue[i].pos.z=world.player.pos.z;
   // drawqueue[i].flags=0;
