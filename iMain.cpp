@@ -1069,16 +1069,18 @@ vec3_t iPositionFinder(vec3_t dir, vec3_t pos) {
 vec3_t iGetNextStep(vec3_t s, vec3_t e) {
   int i, j;
 
-  bool visited[MAX_SIZE * MAX_SIZE * MAX_SIZE] = {0};
+  static bool visited[MAX_SIZE * MAX_SIZE * MAX_SIZE] = {0};
+  for (int i = 0; i < MAX_SIZE * MAX_SIZE * MAX_SIZE; i++)
+    visited[i] = 0;
   visited(s.x, s.y, s.z) = 1;
 
-  vec3_t prev[MAX_SIZE * MAX_SIZE * MAX_SIZE];
+  static vec3_t prev[MAX_SIZE * MAX_SIZE * MAX_SIZE];
   for (int j = 0; j < MAX_SIZE; j++)
     for (int k = 0; k < MAX_SIZE; k++)
       for (int l = 0; l < MAX_SIZE; l++)
         prev(k, j, l) = {.x = -1, .y = -1, .z = -1};
 
-  vec3_t queue[MAX_SIZE * MAX_SIZE * MAX_SIZE];
+  static vec3_t queue[MAX_SIZE * MAX_SIZE * MAX_SIZE];
   for (int j = 0; j < MAX_SIZE * MAX_SIZE * MAX_SIZE; j++)
     queue[j] = {.x = -1, .y = -1, .z = -1};
   i = j = 0;
