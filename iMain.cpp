@@ -28,11 +28,13 @@ Image *qbert_looker;
   visited[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
 #define prev(x, y, z) prev[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
 
-#define blocks(idx, c) ((world.blocks[idx] >> (4 * c)) & 0xf)
-#define visible(idx, c) ((world.visible[idx] >> (4 * c)) & 0xf)
+#define blocks(idx, c) ((world.blocks[idx].packed >> (4 * c)) & 0xf)
+#define visible(idx, c) ((world.visible[idx].packed >> (4 * c)) & 0xf)
 
-#define s_blocks(idx, x, y, z) world.blocks[idx] = (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8)
-#define s_visible(idx, x, y, z) world.visible[idx] = (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8)
+#define s_blocks(idx, x, y, z)                                                                     \
+  world.blocks[idx].packed = (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8)
+#define s_visible(idx, x, y, z)                                                                    \
+  world.visible[idx].packed = (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8)
 
 typedef enum {
   STATE_MENU,
@@ -110,10 +112,20 @@ typedef struct {
   void *ref;
 } drawqueue_t;
 
+typedef union {
+  uint16_t packed;
+  struct {
+    uint16_t x : 4;
+    uint16_t y : 4;
+    uint16_t z : 4;
+    uint16_t reserved : 4;
+  };
+} block_t;
+
 typedef struct {
   tile_t tiles[MAX_SIZE * MAX_SIZE * MAX_SIZE];
-  uint16_t blocks[MAX_BLOCKS];
-  uint16_t visible[MAX_BLOCKS];
+  block_t blocks[MAX_BLOCKS];
+  block_t visible[MAX_BLOCKS];
   color_t states[MAX_STATES];
   enemy_t enemies[MAX_ENEMIES];
   uint16_t blocks_count;
@@ -446,7 +458,7 @@ void iLoadLevel(int level) {
           printf("Got coords for blocks. %d %d %d. %d\n", x & 0xf, y, z,
                  (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8));
           if (gameLevel.blocks_count < MAX_BLOCKS) {
-            gameLevel.blocks[gameLevel.blocks_count] =
+            gameLevel.blocks[gameLevel.blocks_count].packed =
                 (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8);
             gameLevel.blocks_count++;
           }
