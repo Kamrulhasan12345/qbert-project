@@ -369,6 +369,7 @@ void iLoadPlayer(bool initialized) {
   world.player.km.jump.active = 0;
   world.player.km.jump.duration = 250;
   world.player.km.jump.t = 0;
+  world.player.km.la = LOOK_LEFT;
   world.player.max_lives = 3;
   world.player.lives = 3;
   if (initialized) {
@@ -437,8 +438,9 @@ void iLoadLevel(int level) {
     if (!strncmp(line, "LEVEL", 5)) {
       sscanf(line, "LEVEL %d", &gameLevel.level_num);
     } else if (!strncmp(line, "START", 5)) {
-      sscanf(line, "START %d %d %d", &gameLevel.player.km.pos.x, &gameLevel.player.km.pos.y,
-             &gameLevel.player.km.pos.z);
+      int x, y, z;
+      sscanf(line, "START %d %d %d", &x, &y, &z);
+      gameLevel.player.km.pos = {.x = 1. * x, .y = 1. * y, .z = 1. * z};
     } else if (!strncmp(line, "TARGET", 6)) {
       sscanf(line, "TARGET %d", &gameLevel.target_idx);
     } else if (!strncmp(line, "WORLD", 5))
@@ -468,7 +470,7 @@ void iLoadLevel(int level) {
       case 1: {
         int enemy_idx;
         int x, y, z;
-        if (sscanf(line, "%d %d %d %d", &enemy_idx, &x, &y, &z) == 4) {
+        if (sscanf(line, "%d %f %f %f", &enemy_idx, &x, &y, &z) == 4) {
           if (gameLevel.enemy_count < MAX_ENEMIES) {
             gameLevel.enemies[gameLevel.enemy_count++] = {
                 .km = {.jump = {0},
@@ -503,6 +505,7 @@ void iLoadLevel(int level) {
   fclose(fp);
   // copy everything to global world
   world = gameLevel;
+  printf("%g %g %g\n", world.player.km.pos.x, world.player.km.pos.y, world.player.km.pos.z);
 
   iLoadBlocks();
   iLoadEnemies();
@@ -1005,7 +1008,6 @@ void iLoseLife() {
   if (world.player.lives > 0)
     world.player.lives--;
   if (world.player.lives == 0) {
-
     end_game = true;
   } else {
     int ind = rand() % world.visible_count;
