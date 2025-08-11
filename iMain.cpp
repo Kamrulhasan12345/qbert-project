@@ -22,19 +22,22 @@ Image *qbert_looker;
 #define MAX_STATES 7
 #define ESC 0x1b
 
-#define tiles(x, y, z)                                                                             \
-  world.tiles[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
-#define visited(x, y, z)                                                                           \
-  visited[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
-#define prev(x, y, z) prev[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
+// #define tiles(x, y, z)                                                                             \
+//   world.tiles[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
+// #define visited(x, y, z)                                                                           \
+//   visited[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
+// #define prev(x, y, z) prev[((int)(y)) * MAX_SIZE * MAX_SIZE + ((int)(x)) * MAX_SIZE + ((int)(z))]
+#define tiles(x, y, z) world.tiles[(int)(y)][(int)(x)][(int)(z)]
+#define visited(x, y, z) visited[(int)(y)][(int)(x)][(int)(z)]
+#define prev(x, y, z) prev[(int)(y)][(int)(x)][(int)(z)]
 
-#define blocks(idx, c) ((world.blocks[idx].packed >> (4 * c)) & 0xf)
-#define visible(idx, c) ((world.visible[idx].packed >> (4 * c)) & 0xf)
+// #define blocks(idx, c) ((world.blocks[idx].packed >> (4 * c)) & 0xf)
+// #define visible(idx, c) ((world.visible[idx].packed >> (4 * c)) & 0xf)
 
 #define s_blocks(idx, x, y, z)                                                                     \
-  world.blocks[idx].packed = (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8)
+  world.blocks[idx].packed = ((x) & 0xf) | (((y) & 0xf) << 4) | (((z) & 0xf) << 8)
 #define s_visible(idx, x, y, z)                                                                    \
-  world.visible[idx].packed = (x & 0xf) | ((y & 0xf) << 4) | ((z & 0xf) << 8)
+  world.visible[idx].packed = ((x) & 0xf) | (((y) & 0xf) << 4) | (((z) & 0xf) << 8)
 
 typedef enum {
   STATE_MENU,
@@ -123,7 +126,8 @@ typedef union {
 } block_t;
 
 typedef struct {
-  tile_t tiles[MAX_SIZE * MAX_SIZE * MAX_SIZE];
+  // tile_t tiles[MAX_SIZE * MAX_SIZE * MAX_SIZE];
+  tile_t tiles[MAX_SIZE][MAX_SIZE][MAX_SIZE];
   block_t blocks[MAX_BLOCKS];
   block_t visible[MAX_BLOCKS];
   color_t states[MAX_STATES];
@@ -357,9 +361,9 @@ void iLoadEnemies() {
     printf("Got enemy %d.\n", i);
     int idx = rand() % world.visible_count;
     printf("%d\n", world.visible[idx]);
-    world.enemies[i].km.pos.x = (float)visible(idx, 0);
-    world.enemies[i].km.pos.y = (float)visible(idx, 1);
-    world.enemies[i].km.pos.z = (float)visible(idx, 2);
+    world.enemies[i].km.pos.x = (float)world.visible[idx].x;
+    world.enemies[i].km.pos.y = (float)world.visible[idx].y;
+    world.enemies[i].km.pos.z = (float)world.visible[idx].z;
     world.enemies[i].km.jump.duration = 100;
     world.enemies[i].km.jump.t = 0;
     printf("Done with enemy %d.\n", i);
@@ -369,9 +373,9 @@ void iLoadEnemies() {
 
 void iLoadBlocks() {
   for (int i = 0; i < world.blocks_count; i++) {
-    int x = blocks(i, 0);
-    int y = blocks(i, 1);
-    int z = blocks(i, 2);
+    int x = world.blocks[i].x;
+    int y = world.blocks[i].y;
+    int z = world.blocks[i].z;
     printf("Getting blocks: %d %d %d %d\n", world.blocks[i], x, y, z);
     tiles(x, y, z).valid = true;
     tiles(x, y, z).state = 0;
@@ -1014,9 +1018,9 @@ void iLoseLife() {
     end_game = true;
   } else {
     int ind = rand() % world.visible_count;
-    world.player.km.pos.x = visible(ind, 0);
-    world.player.km.pos.y = visible(ind, 1);
-    world.player.km.pos.z = visible(ind, 2);
+    world.player.km.pos.x = world.visible[ind].x;
+    world.player.km.pos.y = world.visible[ind].y;
+    world.player.km.pos.z = world.visible[ind].z;
   }
 }
 
@@ -1081,46 +1085,45 @@ vec3_t iPositionFinder(vec3_t dir, vec3_t pos) {
 vec3_t iGetNextStep(vec3_t s, vec3_t e) {
   int i, j;
 
-  static bool visited[MAX_SIZE * MAX_SIZE * MAX_SIZE] = {0};
-  for (int i = 0; i < MAX_SIZE * MAX_SIZE * MAX_SIZE; i++)
-    visited[i] = 0;
-  visited(s.x, s.y, s.z) = 1;
+  static bool visited[MAX_SIZE][MAX_SIZE][MAX_SIZE] = {0};
+  static vec3_t prev[MAX_SIZE][MAX_SIZE][MAX_SIZE];
+  static vec3_t queue[MAX_SIZE * MAX_SIZE * MAX_SIZE];
 
-  static vec3_t prev[MAX_SIZE * MAX_SIZE * MAX_SIZE];
   for (int j = 0; j < MAX_SIZE; j++)
     for (int k = 0; k < MAX_SIZE; k++)
       for (int l = 0; l < MAX_SIZE; l++)
-        prev(k, j, l) = {.x = -1, .y = -1, .z = -1};
+        prev(k, j, l) = {.x = -1, .y = -1, .z = -1}, visited(k, j, l) = 0;
+  visited(s.x, s.y, s.z) = 1;
 
-  static vec3_t queue[MAX_SIZE * MAX_SIZE * MAX_SIZE];
   for (int j = 0; j < MAX_SIZE * MAX_SIZE * MAX_SIZE; j++)
     queue[j] = {.x = -1, .y = -1, .z = -1};
   i = j = 0;
   queue[j++] = {.x = s.x, .y = s.y, .z = s.z};
 
-  printf("full tracer: \n");
+  // printf("full tracer: \n");
   while (~(int)queue[i].x) {
-    printf("out: %d queue: %g, %g, %g\n", i, queue[i].x, queue[i].y, queue[i].z);
+    // printf("out: %d queue: %g, %g, %g\n", i, queue[i].x, queue[i].y, queue[i].z);
     for (int k = 0; k < 4; k++) {
       vec3_t n = iPositionFinder(dirs[k], queue[i]);
       if (~(int)n.x && !visited(n.x, n.y, n.z)) {
-        printf("%d %d: %g %g %g\n", i, j + 1, n.x, n.y, n.z);
+        // printf("%d %d: %g %g %g\n", i, j + 1, n.x, n.y, n.z);
         queue[j++] = {.x = n.x, .y = n.y, .z = n.z};
-        printf("in: %d queue: %g, %g, %g\n", j - 1, queue[j - 1].x, queue[j - 1].y, queue[i].z);
+        // printf("in: %d queue: %g, %g, %g\n", j - 1, queue[j - 1].x, queue[j - 1].y, queue[i].z);
         visited(n.x, n.y, n.z) = 1;
         prev(n.x, n.y, n.z) = {.x = queue[i].x, .y = queue[i].y, .z = queue[i].z};
       }
-      printf("\n");
+      // printf("\n");
     }
     i++;
   }
   vec3_t path[MAX_SIZE * MAX_SIZE * MAX_SIZE];
   i = 0;
-  printf("Path: \n");
+  // printf("Path: \n");
   for (vec3_t at = {.x = e.x, .y = e.y, .z = e.z}; ~(int)at.x; at = {.x = prev(at.x, at.y, at.z).x,
                                                                      .y = prev(at.x, at.y, at.z).y,
                                                                      .z = prev(at.x, at.y, at.z).z})
-    printf("%d, %g %g %g\n", i, at.x, at.y, at.z), path[i++] = {.x = at.x, .y = at.y, .z = at.z};
+    /*printf("%d, %g %g %g\n", i, at.x, at.y, at.z), */
+    path[i++] = {.x = at.x, .y = at.y, .z = at.z};
 
   if (path[i - 1].x == s.x && path[i - 1].y == s.y && path[i - 1].z == s.z) {
     printf("\n%g %g %g\n\n%g %g %g\n", path[i - 1].x, path[i - 1].y, path[i - 1].z, s.x, s.y, s.z);
@@ -1238,7 +1241,7 @@ void iRestart() {
 void iCheckCompletion() {
   int i;
   for (i = 0; i < world.visible_count; i++) {
-    int x = visible(i, 0), y = visible(i, 1), z = visible(i, 2);
+    int x = world.visible[i].x, y = world.visible[i].y, z = world.visible[i].z;
     if (tiles(x, y, z).state != world.target_idx)
       break;
   }
@@ -1357,7 +1360,7 @@ function iDraw() is called again and again by the system.
 void iDraw() {
   // place your drawing codes here
   iClear();
-
+  iShowSpeed(10, 10);
   if (app_state == STATE_MENU) {
     iMenu();
     iShowSprite(&snake);
@@ -1815,11 +1818,12 @@ int main(int argc, char *argv[]) {
   iPrintWorld(&world);
   iLoadResource();
   iLoadHighscore();
-  printf("%d\n", sizeof(world.blocks) / sizeof(world.blocks[0]));
   iInitializeSound();
+
   sound_1 = iPlaySound("assets/sounds/undertale_1.wav", true, 65);
   sound_2 = iPlaySound("assets/sounds/undertale_2.wav", true, 65);
   sound_3 = iPlaySound("assets/sounds/jump_sound.wav", false, 30);
+
   iPauseSound(sound_3);
   iPauseSound(sound_2);
   iSetTimer(600, iAnim);
